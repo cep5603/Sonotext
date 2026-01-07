@@ -15,6 +15,7 @@ import asyncio
 from model_manager import model_manager
 from pdf_processor import extract_text_from_pdf
 from history_manager import history_manager
+import llm_service
 
 app = FastAPI(title="Sonotext Local API")
 
@@ -35,9 +36,11 @@ class GenerateRequest(BaseModel):
     voice: str = "af_sarah"
     speed: float = 1.0
 
+class CleanupRequest(BaseModel):
+    text: str
+
 def split_into_chunks(text: str, max_chars: int = 500) -> list[str]:
     """Split text into chunks at sentence boundaries."""
-    # Split by sentence-ending punctuation
     sentences = re.split(r'(?<=[.!?])\s+', text.strip())
     
     chunks = []
@@ -54,7 +57,6 @@ def split_into_chunks(text: str, max_chars: int = 500) -> list[str]:
     if current_chunk:
         chunks.append(current_chunk)
     
-    # If no chunks created (no sentence boundaries), just return original
     return chunks if chunks else [text]
 
 @app.get("/api/voices")
@@ -64,9 +66,32 @@ def get_voices():
         return []
     return list(model_manager.voices.keys())
 
+@app.get("/api/llm-status")
+def get_llm_status():
+    """Check if LM Studio is available and get current model."""
+    available = llm_service.check_llm_available()
+    return {
+        "available": available,
+        "currentModel": llm_service.get_current_model() if available else None
+    }
+
+@app.get("/api/llm-models")
+def get_llm_models():
+    """Get list of available LLM models."""
+    models = llm_service.get_available_models()
+    return {"models": models, "currentModel": llm_service.get_current_model()}
+
+class SetModelRequest(BaseModel):
+    model: str
+
+@app.post("/api/llm-model")
+def set_llm_model(req: SetModelRequest):
+    """Set the LLM model to use."""
+    llm_service.set_current_model(req.model)
+    return {"status": "success", "model": req.model}
+
 @app.get("/api/history")
 def get_history():
-    # Auto-fix missing durations for older entries
     history_manager.update_missing_durations()
     return history_manager.get_history()
 
@@ -87,34 +112,35 @@ async def generate_audio(req: GenerateRequest):
             sample_rate = None
             
             for i, chunk in enumerate(chunks):
-                # Send progress update
                 progress = int((i / total_chunks) * 100)
                 yield {
                     "event": "progress",
                     "data": json.dumps({"progress": progress, "chunk": i + 1, "total": total_chunks})
                 }
                 
-                # Generate audio for this chunk
                 samples, sr = model_manager.generate_audio(chunk, req.voice, req.speed)
                 all_samples.append(samples)
                 sample_rate = sr
                 
-                # Small yield to allow progress update to be sent
                 await asyncio.sleep(0.01)
             
-            # Concatenate all audio
             final_samples = np.concatenate(all_samples)
             duration = len(final_samples) / sample_rate
             
-            # Save to disk
-            filename = f"{uuid.uuid4()}.wav"
-            filepath = history_manager.get_output_path(filename)
+            # Try to generate a descriptive filename using LLM
+            generated_name = llm_service.generate_filename(req.text)
+            if generated_name:
+                # Add short UUID suffix to prevent overwrites
+                short_id = str(uuid.uuid4())[:8]
+                filename = f"{generated_name}-{short_id}.wav"
+            else:
+                filename = f"{uuid.uuid4()}.wav"
+            
+            filepath = history_manager.get_output_path_for_new_file(filename)
             sf.write(filepath, final_samples, sample_rate, format='WAV')
             
-            # Add to history
             entry = history_manager.add_entry(req.text, req.voice, req.speed, filename, duration)
             
-            # Send completion with entry data
             yield {
                 "event": "complete",
                 "data": json.dumps(entry)
@@ -122,6 +148,53 @@ async def generate_audio(req: GenerateRequest):
             
         except Exception as e:
             logging.error(f"Generation failed: {e}")
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": str(e)})
+            }
+    
+    return EventSourceResponse(event_generator())
+
+@app.post("/api/cleanup-text")
+async def cleanup_text(req: CleanupRequest):
+    """Clean text with progress streaming via SSE."""
+    
+    async def event_generator():
+        try:
+            if not llm_service.check_llm_available():
+                yield {
+                    "event": "error",
+                    "data": json.dumps({"error": "LM Studio is not running. Please start it and try again."})
+                }
+                return
+            
+            chunks = llm_service.split_into_chunks(req.text)
+            total_chunks = len(chunks)
+            cleaned_chunks = []
+            
+            for i, chunk in enumerate(chunks):
+                progress = int((i / total_chunks) * 100)
+                yield {
+                    "event": "progress",
+                    "data": json.dumps({"progress": progress, "chunk": i + 1, "total": total_chunks})
+                }
+                
+                # Run cleanup in thread pool to avoid blocking
+                cleaned = await asyncio.to_thread(llm_service.cleanup_text_chunk, chunk)
+                cleaned_chunks.append(cleaned)
+                
+                await asyncio.sleep(0.01)
+            
+            # Join cleaned chunks
+            full_cleaned_text = "\n\n".join(cleaned_chunks)
+            
+            yield {
+                "event": "complete",
+                "data": json.dumps({"text": full_cleaned_text})
+            }
+            
+        except Exception as e:
+            logging.error(f"Text cleanup failed: {e}")
             yield {
                 "event": "error",
                 "data": json.dumps({"error": str(e)})
@@ -141,6 +214,29 @@ async def parse_pdf(file: UploadFile = File(...)):
         return {"text": text}
     except Exception as e:
         logging.error(f"PDF Parsing failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ShowInExplorerRequest(BaseModel):
+    filename: str
+
+@app.post("/api/show-in-explorer")
+async def show_in_explorer(req: ShowInExplorerRequest):
+    """Open Windows Explorer and highlight the specified file."""
+    import subprocess
+    import os
+    
+    filepath = history_manager.get_output_path(req.filename)
+    abs_path = os.path.abspath(filepath)
+    
+    if not os.path.exists(abs_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    try:
+        # Windows: /select highlights the file in Explorer
+        subprocess.Popen(f'explorer /select,"{abs_path}"')
+        return {"status": "success"}
+    except Exception as e:
+        logging.error(f"Failed to open explorer: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

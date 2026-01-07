@@ -1,16 +1,14 @@
 import { useState, useCallback } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { Loader2, UploadCloud, FileText, ArrowLeft, Clock } from "lucide-react"
+import { Loader2, UploadCloud, FileText, ArrowLeft, Clock, Sparkles } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { Slider } from "@/components/ui/slider"
 import { Progress } from "@/components/ui/progress"
-import { VoiceSelector } from "./VoiceSelector"
 import { AudioPlayer } from "./AudioPlayer"
 import { HistorySidebar } from "./HistorySidebar"
+import { SettingsSidebar } from "./SettingsSidebar"
 import type { HistoryItem } from "@/types"
 import { cn } from "@/lib/utils"
 
@@ -34,6 +32,10 @@ export function TextToSpeech() {
     const [error, setError] = useState<string | null>(null)
     const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null)
     const [shouldAutoplay, setShouldAutoplay] = useState(false)
+    // Text cleanup state
+    const [isCleaning, setIsCleaning] = useState(false)
+    const [cleanupProgress, setCleanupProgress] = useState(0)
+    const [cleanupProgressText, setCleanupProgressText] = useState("")
     const queryClient = useQueryClient()
 
     const handleGenerate = useCallback(async () => {
@@ -89,6 +91,57 @@ export function TextToSpeech() {
         }
     }, [text, voice, speed, queryClient])
 
+    const handleCleanText = useCallback(async () => {
+        setIsCleaning(true)
+        setCleanupProgress(0)
+        setCleanupProgressText("Starting cleanup...")
+        setError(null)
+
+        try {
+            const response = await fetch("http://localhost:8000/api/cleanup-text", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text }),
+            })
+
+            const reader = response.body?.getReader()
+            const decoder = new TextDecoder()
+
+            if (!reader) throw new Error("No response body")
+
+            let buffer = ""
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+
+                buffer += decoder.decode(value, { stream: true })
+                const lines = buffer.split("\n")
+                buffer = lines.pop() || ""
+
+                for (const line of lines) {
+                    if (line.startsWith("data: ")) {
+                        const data = JSON.parse(line.slice(6))
+
+                        if (data.progress !== undefined) {
+                            setCleanupProgress(data.progress)
+                            setCleanupProgressText(`Cleaning chunk ${data.chunk} of ${data.total}...`)
+                        } else if (data.text !== undefined) {
+                            setText(data.text)
+                            setCleanupProgress(100)
+                            setCleanupProgressText("Complete!")
+                        } else if (data.error) {
+                            throw new Error(data.error)
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Cleanup failed")
+        } finally {
+            setIsCleaning(false)
+        }
+    }, [text])
+
     const pdfMutation = useMutation({
         mutationFn: async (file: File) => {
             const formData = new FormData()
@@ -130,6 +183,11 @@ export function TextToSpeech() {
     }
 
     const handleSelectItem = (item: HistoryItem, autoplay: boolean = false) => {
+        // If clicking Play on already-selected item, just trigger autoplay
+        if (selectedItem?.id === item.id && autoplay) {
+            setShouldAutoplay(true)
+            return
+        }
         setSelectedItem(item)
         setAudioUrl(`http://localhost:8000${item.url}`)
         setAudioFilename(item.filename)
@@ -141,9 +199,15 @@ export function TextToSpeech() {
     }
 
     return (
-        <div className="flex w-full h-[calc(100vh-8rem)] gap-6">
-            <div className="flex-1 min-w-0">
-                <Card className="border-none shadow-2xl bg-card/80 backdrop-blur-xl h-full flex flex-col">
+        <div className="flex w-full h-full">
+            <SettingsSidebar
+                voice={voice}
+                onVoiceChange={setVoice}
+                speed={speed}
+                onSpeedChange={setSpeed}
+            />
+            <div className="flex-1 min-w-0 min-h-0 h-full px-8 py-4">
+                <Card className="border-none shadow-2xl bg-card/80 backdrop-blur-xl h-full flex flex-col max-w-4xl mx-auto">
                     <CardContent className="p-8 space-y-6 flex-1 flex flex-col overflow-hidden">
 
                         {/* Detail View - shows when a history item is selected */}
@@ -182,7 +246,7 @@ export function TextToSpeech() {
                             <>
                                 <div
                                     className={cn(
-                                        "relative rounded-xl border-2 border-dashed transition-all duration-300 ease-in-out p-1 flex-shrink-0",
+                                        "relative rounded-xl border-2 border-dashed transition-all duration-300 ease-in-out p-1 flex-1 min-h-0 flex flex-col",
                                         isDragging ? "border-primary bg-primary/10 scale-[1.01]" : "border-muted-foreground/20 hover:border-primary/50"
                                     )}
                                     onDragOver={handleDragOver}
@@ -191,7 +255,7 @@ export function TextToSpeech() {
                                 >
                                     <Textarea
                                         placeholder="Paste text here or drag & drop a PDF..."
-                                        className="min-h-[200px] resize-y text-lg p-6 bg-transparent border-none focus-visible:ring-0"
+                                        className="flex-1 min-h-0 resize-none text-lg p-6 bg-transparent border-none focus-visible:ring-0"
                                         value={text}
                                         onChange={(e) => setText(e.target.value)}
                                     />
@@ -217,45 +281,52 @@ export function TextToSpeech() {
                                     )}
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center flex-shrink-0">
-                                    <div className="space-y-4">
-                                        <div className="space-y-2">
-                                            <Label>Voice Model</Label>
-                                            <VoiceSelector value={voice} onValueChange={setVoice} />
+                                {/* Cleanup Progress Bar */}
+                                {isCleaning && (
+                                    <div className="space-y-2 animate-in fade-in duration-300 flex-shrink-0">
+                                        <div className="flex justify-between text-sm text-muted-foreground">
+                                            <span>{cleanupProgressText}</span>
+                                            <span>{cleanupProgress}%</span>
                                         </div>
-
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between">
-                                                <Label>Speed</Label>
-                                                <span className="text-sm text-muted-foreground">{speed[0]}x</span>
-                                            </div>
-                                            <Slider
-                                                value={speed}
-                                                onValueChange={setSpeed}
-                                                min={0.5}
-                                                max={2.0}
-                                                step={0.1}
-                                            />
-                                        </div>
+                                        <Progress value={cleanupProgress} className="h-2" />
                                     </div>
+                                )}
 
-                                    <div className="flex justify-center md:justify-end">
-                                        <Button
-                                            size="lg"
-                                            className="w-full md:w-auto min-w-[160px] text-lg h-12"
-                                            onClick={handleGenerate}
-                                            disabled={!text || isGenerating}
-                                        >
-                                            {isGenerating ? (
-                                                <>
-                                                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                                                    Synthesizing...
-                                                </>
-                                            ) : (
-                                                "Generate Audio"
-                                            )}
-                                        </Button>
-                                    </div>
+                                <div className="flex justify-end gap-3 flex-shrink-0">
+                                    <Button
+                                        variant="secondary"
+                                        size="lg"
+                                        className="h-12"
+                                        onClick={handleCleanText}
+                                        disabled={!text || isCleaning || isGenerating}
+                                    >
+                                        {isCleaning ? (
+                                            <>
+                                                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                                Cleaning...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Sparkles className="h-5 w-5 mr-2" />
+                                                Clean Text
+                                            </>
+                                        )}
+                                    </Button>
+                                    <Button
+                                        size="lg"
+                                        className="w-full md:w-auto min-w-[160px] text-lg h-12"
+                                        onClick={handleGenerate}
+                                        disabled={!text || isGenerating || isCleaning}
+                                    >
+                                        {isGenerating ? (
+                                            <>
+                                                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                                Synthesizing...
+                                            </>
+                                        ) : (
+                                            "Generate Audio"
+                                        )}
+                                    </Button>
                                 </div>
 
                                 {/* Progress Bar */}
@@ -290,6 +361,6 @@ export function TextToSpeech() {
             </div>
 
             <HistorySidebar onSelectItem={handleSelectItem} />
-        </div>
+        </div >
     )
 }

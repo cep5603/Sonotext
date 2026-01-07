@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { MoreVertical, Play, Trash2, Download, Clock } from "lucide-react"
+import { MoreVertical, Play, Trash2, Download, Clock, FolderOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
     DropdownMenu,
@@ -19,6 +19,11 @@ function formatDuration(seconds?: number): string {
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+function formatFilename(filename: string): string {
+    // Remove extension and UUID suffix for display
+    return filename.replace(/\.wav$/, '').replace(/-[a-f0-9]{8}$/, '').replace(/-/g, ' ')
 }
 
 export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
@@ -41,8 +46,16 @@ export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
         },
     })
 
+    const handleShowInExplorer = async (filename: string) => {
+        try {
+            await axios.post("http://localhost:8000/api/show-in-explorer", { filename })
+        } catch (e) {
+            console.error("Failed to open explorer:", e)
+        }
+    }
+
     return (
-        <div className="w-[30rem] border-l border-border bg-card/50 backdrop-blur-sm h-[calc(100vh-8rem)] flex flex-col shrink-0">
+        <div className="w-[26rem] border-l border-border bg-card/50 backdrop-blur-sm h-full flex flex-col shrink-0">
             <div className="p-4 border-b border-border shrink-0">
                 <h2 className="font-semibold tracking-tight">History</h2>
             </div>
@@ -53,12 +66,17 @@ export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
                         className="rounded-lg border border-border bg-background p-3 transition-all hover:bg-accent/50 cursor-pointer"
                         onClick={() => onSelectItem(item)}
                     >
-                        <div className="space-y-2">
-                            <p className="text-sm font-medium leading-tight line-clamp-2 break-words" title={item.text}>
+                        <div className="space-y-1.5">
+                            {/* Filename as title */}
+                            <p className="text-sm font-medium leading-tight truncate" title={item.filename}>
+                                {formatFilename(item.filename)}
+                            </p>
+                            {/* Text preview in gray */}
+                            <p className="text-xs text-muted-foreground leading-tight line-clamp-2 break-words" title={item.text}>
                                 {item.text || "No text"}
                             </p>
-                            <div className="flex items-center text-xs text-muted-foreground gap-1.5 flex-wrap">
-                                <span className="truncate max-w-[60px]">{item.voice}</span>
+                            <div className="flex items-center text-xs text-muted-foreground gap-1.5 flex-wrap pt-1">
+                                <span>{item.voice}</span>
                                 <span>•</span>
                                 <span>{item.speed}x</span>
                                 <span>•</span>
@@ -92,6 +110,9 @@ export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" side="left">
+                                    <DropdownMenuItem onClick={() => handleShowInExplorer(item.filename)}>
+                                        <FolderOpen className="mr-2 h-3 w-3" /> Show in Explorer
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => {
                                         const a = document.createElement('a')
                                         a.href = `http://localhost:8000${item.url}`

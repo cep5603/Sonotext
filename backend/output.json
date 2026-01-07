@@ -1,0 +1,132 @@
+{
+  "data": [
+    {
+      "id": "text-embedding-nomic-embed-text-v1.5",
+      "object": "model",
+      "type": "embeddings",
+      "publisher": "nomic-ai",
+      "arch": "nomic-bert",
+      "compatibility_type": "gguf",
+      "quantization": "Q4_K_M",
+      "state": "not-loaded",
+      "max_context_length": 2048
+    },
+    {
+      "id": "minimax-m2.1",
+      "object": "model",
+      "type": "llm",
+      "publisher": "unsloth",
+      "arch": "minimax-m2",
+      "compatibility_type": "gguf",
+      "quantization": "Q2_K_L",
+      "state": "not-loaded",
+      "max_context_length": 196608,
+      "capabilities": [
+        "tool_use"
+      ]
+    },
+    {
+      "id": "glm-4.7",
+      "object": "model",
+      "type": "llm",
+      "publisher": "unsloth",
+      "arch": "glm4moe",
+      "compatibility_type": "gguf",
+      "state": "not-loaded",
+      "max_context_length": 202752,
+      "capabilities": [
+        "tool_use"
+      ]
+    },
+    {
+      "id": "essentialai/rnj-1",
+      "object": "model",
+      "type": "llm",
+      "publisher": "essentialai",
+      "arch": "gemma3",
+      "compatibility_type": "gguf",
+      "quantization": "Q8_0",
+      "state": "not-loaded",
+      "max_context_length": 32768,
+      "capabilities": [
+        "tool_use"
+      ]
+    },
+    {
+      "id": "google/gemma-3-4b",
+      "object": "model",
+      "type": "vlm",
+      "publisher": "google",
+      "arch": "gemma3",
+      "compatibility_type": "gguf",
+      "quantization": "Q8_0",
+      "state": "not-loaded",
+      "max_context_length": 131072
+    },
+    {
+      "id": "lfm2-350m",
+      "object": "model",
+      "type": "llm",
+      "publisher": "LiquidAI",
+      "arch": "lfm2",
+      "compatibility_type": "gguf",
+      "quantization": "Q4_0",
+      "state": "not-loaded",
+      "max_context_length": 128000
+    },
+    {
+      "id": "openai/gpt-oss-120b",
+      "object": "model",
+      "type": "llm",
+      "publisher": "openai",
+      "arch": "gpt-oss",
+      "compatibility_type": "gguf",
+      "quantization": "MXFP4",
+      "state": "not-loaded",
+      "max_context_length": 131072,
+      "capabilities": [
+        "tool_use"
+      ]
+    },
+    {
+      "id": "openai/gpt-oss-20b",
+      "object": "model",
+      "type": "llm",
+      "publisher": "openai",
+      "arch": "gpt-oss",
+      "compatibility_type": "gguf",
+      "quantization": "MXFP4",
+      "state": "not-loaded",
+      "max_context_length": 131072,
+      "capabilities": [
+        "tool_use"
+      ]
+    },
+    {
+      "id": "mistralai/devstral-small-2507",
+      "object": "model",
+      "type": "llm",
+      "publisher": "mistralai",
+      "arch": "llama",
+      "compatibility_type": "gguf",
+      "quantization": "Q4_K_M",
+      "state": "not-loaded",
+      "max_context_length": 131072,
+      "capabilities": [
+        "tool_use"
+      ]
+    },
+    {
+      "id": "google/gemma-3-12b",
+      "object": "model",
+      "type": "vlm",
+      "publisher": "google",
+      "arch": "gemma3",
+      "compatibility_type": "gguf",
+      "quantization": "Q4_K_M",
+      "state": "not-loaded",
+      "max_context_length": 131072
+    }
+  ],
+  "object": "list"
+}

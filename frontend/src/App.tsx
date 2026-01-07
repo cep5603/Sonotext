@@ -6,16 +6,13 @@ const queryClient = new QueryClient()
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen bg-background text-foreground flex flex-col p-4">
-        <header className="text-center space-y-2 mb-6">
+      <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
+        <header className="text-center space-y-2 py-4 shrink-0">
           <h1 className="text-4xl font-light tracking-tight lg:text-5xl">
             Sonotext
           </h1>
-          <p className="text-muted-foreground text-lg">
-            Local. Fast. Private.
-          </p>
         </header>
-        <main className="flex-1 max-w-7xl mx-auto w-full">
+        <main className="flex-1 w-full min-h-0">
           <TextToSpeech />
         </main>
       </div>

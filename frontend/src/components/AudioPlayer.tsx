@@ -26,6 +26,8 @@ export function AudioPlayer({ audioUrl, filename, autoplay, onPlayStarted }: Aud
     const autoplayRef = useRef(autoplay)
     const onPlayStartedRef = useRef(onPlayStarted)
 
+    const lastLoadedUrlRef = useRef<string | null>(null)
+
     // Keep refs in sync with props
     useEffect(() => {
         autoplayRef.current = autoplay
@@ -57,7 +59,14 @@ export function AudioPlayer({ audioUrl, filename, autoplay, onPlayStarted }: Aud
             wavesurferRef.current.on('error', (e) => console.error("WaveSurfer Error:", e))
 
             wavesurferRef.current.on('ready', () => {
-                setDuration(wavesurferRef.current?.getDuration() ?? 0)
+                const dur = wavesurferRef.current?.getDuration() ?? 0
+                setDuration(dur)
+
+                if (pendingUrlRef.current) {
+                    lastLoadedUrlRef.current = pendingUrlRef.current
+                    pendingUrlRef.current = null
+                }
+
                 // Handle autoplay after load - check ref for latest value
                 if (autoplayRef.current) {
                     wavesurferRef.current?.play()
@@ -82,9 +91,12 @@ export function AudioPlayer({ audioUrl, filename, autoplay, onPlayStarted }: Aud
         }
     }, []) // Empty deps - init once
 
+    const pendingUrlRef = useRef<string | null>(null)
+
     // Handle URL changes
     useEffect(() => {
         if (audioUrl && wavesurferRef.current) {
+            pendingUrlRef.current = audioUrl
             // Stop any current playback and reset state before loading new audio
             if (wavesurferRef.current.isPlaying()) {
                 wavesurferRef.current.stop()
@@ -92,9 +104,24 @@ export function AudioPlayer({ audioUrl, filename, autoplay, onPlayStarted }: Aud
             setIsPlaying(false)
             setCurrentTime(0)
             setDuration(0)
+            // Reset cursor position visually
+            wavesurferRef.current.seekTo(0)
             wavesurferRef.current.load(audioUrl)
         }
     }, [audioUrl])
+
+    // Handle autoplay prop changes (for already-loaded audio)
+    useEffect(() => {
+        // Only play if:
+        // 1. autoplay is true
+        // 2. We have a valid duration (loaded)
+        // 3. The requested audioUrl matches what is actually loaded
+        if (autoplay && wavesurferRef.current && duration > 0 && audioUrl === lastLoadedUrlRef.current) {
+            // Audio is already loaded, just play it
+            wavesurferRef.current.play()
+            onPlayStarted?.()
+        }
+    }, [autoplay, duration, onPlayStarted, audioUrl])
 
     const togglePlay = () => {
         wavesurferRef.current?.playPause()
