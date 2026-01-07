@@ -1,11 +1,17 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { Loader2, UploadCloud, FileText, ArrowLeft, Clock, Sparkles } from "lucide-react"
+import { Loader2, UploadCloud, FileText, ArrowLeft, Clock, Sparkles, ChevronDown } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { AudioPlayer } from "./AudioPlayer"
 import { HistorySidebar } from "./HistorySidebar"
 import { SettingsSidebar } from "./SettingsSidebar"
@@ -141,6 +147,23 @@ export function TextToSpeech() {
             setIsCleaning(false)
         }
     }, [text])
+
+    // Ref to track if we should generate after cleaning
+    const generateAfterCleanRef = useRef(false)
+
+    const handleCleanAndGenerate = useCallback(async () => {
+        generateAfterCleanRef.current = true
+        await handleCleanText()
+    }, [handleCleanText])
+
+    // Effect to trigger generation after cleaning completes
+    const prevIsCleaningRef = useRef(isCleaning)
+    if (prevIsCleaningRef.current && !isCleaning && generateAfterCleanRef.current) {
+        generateAfterCleanRef.current = false
+        // Schedule generation for next tick to avoid state conflicts
+        setTimeout(() => handleGenerate(), 0)
+    }
+    prevIsCleaningRef.current = isCleaning
 
     const pdfMutation = useMutation({
         mutationFn: async (file: File) => {
@@ -312,21 +335,40 @@ export function TextToSpeech() {
                                             </>
                                         )}
                                     </Button>
-                                    <Button
-                                        size="lg"
-                                        className="w-full md:w-auto min-w-[160px] text-lg h-12"
-                                        onClick={handleGenerate}
-                                        disabled={!text || isGenerating || isCleaning}
-                                    >
-                                        {isGenerating ? (
-                                            <>
-                                                <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                                                Synthesizing...
-                                            </>
-                                        ) : (
-                                            "Generate Audio"
-                                        )}
-                                    </Button>
+                                    <div className="flex">
+                                        <Button
+                                            size="lg"
+                                            className="min-w-[160px] text-lg h-12 rounded-r-none"
+                                            onClick={handleGenerate}
+                                            disabled={!text || isGenerating || isCleaning}
+                                        >
+                                            {isGenerating ? (
+                                                <>
+                                                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                                    Synthesizing...
+                                                </>
+                                            ) : (
+                                                "Generate Audio"
+                                            )}
+                                        </Button>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button
+                                                    size="lg"
+                                                    className="h-12 px-2 rounded-l-none border-l border-primary-foreground/20"
+                                                    disabled={!text || isGenerating || isCleaning}
+                                                >
+                                                    <ChevronDown className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onClick={handleCleanAndGenerate}>
+                                                    <Sparkles className="mr-2 h-4 w-4" />
+                                                    Clean & Generate
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
                                 </div>
 
                                 {/* Progress Bar */}

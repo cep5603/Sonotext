@@ -22,8 +22,10 @@ function formatDuration(seconds?: number): string {
 }
 
 function formatFilename(filename: string): string {
+    // Get just the filename without path
+    const basename = filename.split('/').pop() || filename
     // Remove extension and UUID suffix for display
-    return filename.replace(/\.wav$/, '').replace(/-[a-f0-9]{8}$/, '').replace(/-/g, ' ')
+    return basename.replace(/\.wav$/, '').replace(/-[a-f0-9]{8}$/, '').replace(/-/g, ' ')
 }
 
 export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {

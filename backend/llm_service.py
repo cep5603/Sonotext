@@ -83,6 +83,43 @@ def get_available_models() -> list[dict]:
         return []
 
 
+def get_model_status(model_id: str) -> str:
+    """Get the loading status of a specific model. Returns 'loaded', 'loading', or 'not-loaded'."""
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            # URL encode the model_id for path
+            encoded_id = model_id.replace("/", "%2F")
+            response = client.get(f"{LM_STUDIO_URL}/api/v0/models/{encoded_id}")
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("state", "not-loaded")
+            return "not-loaded"
+    except Exception as e:
+        logger.error(f"Failed to get model status: {e}")
+        return "not-loaded"
+
+
+def unload_model(model_id: str) -> bool:
+    """Unload a model using the LM Studio CLI."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["lms", "unload", model_id],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode == 0:
+            logger.info(f"Unloaded model: {model_id}")
+            return True
+        else:
+            logger.error(f"Failed to unload model: {result.stderr}")
+            return False
+    except Exception as e:
+        logger.error(f"Failed to unload model: {e}")
+        return False
+
+
 def generate_filename(text: str) -> Optional[str]:
     """
     Generate a concise, descriptive filename from text content.

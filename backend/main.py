@@ -90,6 +90,20 @@ def set_llm_model(req: SetModelRequest):
     llm_service.set_current_model(req.model)
     return {"status": "success", "model": req.model}
 
+@app.get("/api/llm-model-status")
+def get_llm_model_status():
+    """Get the loading status of the current model."""
+    current_model = llm_service.get_current_model()
+    status = llm_service.get_model_status(current_model)
+    return {"model": current_model, "status": status}
+
+@app.post("/api/llm-unload")
+def unload_llm_model():
+    """Unload the current LLM model."""
+    current_model = llm_service.get_current_model()
+    success = llm_service.unload_model(current_model)
+    return {"status": "success" if success else "failed", "model": current_model}
+
 @app.get("/api/history")
 def get_history():
     history_manager.update_missing_durations()
