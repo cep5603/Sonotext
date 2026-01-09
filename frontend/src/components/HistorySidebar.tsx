@@ -59,7 +59,7 @@ export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
     return (
         <div className="w-[26rem] border-l border-border bg-card/50 backdrop-blur-sm h-full flex flex-col shrink-0">
             <div className="p-4 border-b border-border shrink-0">
-                <h2 className="font-semibold tracking-tight">History</h2>
+                <h2 className="font-semibold tracking-tight">Generation History</h2>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {history?.map((item) => (

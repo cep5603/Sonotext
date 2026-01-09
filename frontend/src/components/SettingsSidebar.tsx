@@ -35,15 +35,6 @@ const LANGUAGE_OPTIONS = [
     { value: "pt-br", label: "Portuguese (BR)" },
 ]
 
-interface PrecisionOption {
-    id: string
-    filename: string
-    size: string
-    gpu: boolean
-    downloaded: boolean
-    active: boolean
-}
-
 export function SettingsSidebar({
     voice,
     onVoiceChange,
@@ -53,25 +44,6 @@ export function SettingsSidebar({
     onSpeedChange,
 }: SettingsSidebarProps) {
     const queryClient = useQueryClient()
-
-    // Model precision state
-    const { data: precisionData } = useQuery({
-        queryKey: ["model-precision"],
-        queryFn: async () => {
-            const res = await axios.get("http://localhost:8000/api/model-precision")
-            return res.data as { options: PrecisionOption[]; current: string }
-        },
-    })
-
-    const setPrecisionMutation = useMutation({
-        mutationFn: async (precision: string) => {
-            await axios.post("http://localhost:8000/api/model-precision", { precision })
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["model-precision"] })
-            queryClient.invalidateQueries({ queryKey: ["voices"] })
-        },
-    })
 
     // LLM model status
     const { data: modelStatus } = useQuery({
@@ -152,43 +124,6 @@ export function SettingsSidebar({
                             max={2.0}
                             step={0.1}
                         />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label>Model Precision</Label>
-                        <Select
-                            value={precisionData?.current ?? "fp32"}
-                            onValueChange={(value) => setPrecisionMutation.mutate(value)}
-                            disabled={setPrecisionMutation.isPending}
-                        >
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select precision" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {precisionData?.options.map((opt) => (
-                                    <SelectItem key={opt.id} value={opt.id}>
-                                        <div className="flex items-center gap-2">
-                                            <span className="uppercase font-medium">{opt.id}</span>
-                                            <span className="text-xs text-muted-foreground">
-                                                ({opt.size})
-                                            </span>
-                                            {opt.gpu && (
-                                                <span className="text-xs text-green-500">GPU</span>
-                                            )}
-                                            {!opt.downloaded && (
-                                                <span className="text-xs text-yellow-500">⬇</span>
-                                            )}
-                                        </div>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {setPrecisionMutation.isPending && (
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                <span>Loading model...</span>
-                            </div>
-                        )}
                     </div>
                 </div>
 

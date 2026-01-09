@@ -10,15 +10,16 @@ if (-not (Test-Path "$VenvPath\Scripts\python.exe")) {
     python -m venv $VenvPath
 }
 
-# Activate venv and install dependencies
-Write-Host "Installing Backend Dependencies..." -ForegroundColor Yellow
-& "$VenvPath\Scripts\pip.exe" install -r "$BackendPath\requirements.txt" --upgrade
+# Check if PyTorch with CUDA is installed
+$torchCheck = & "$VenvPath\Scripts\python.exe" -c "import torch; print(torch.cuda.is_available())" 2>$null
+if ($torchCheck -ne "True") {
+    Write-Host "Installing PyTorch with CUDA 12.8..." -ForegroundColor Yellow
+    & "$VenvPath\Scripts\pip.exe" install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+}
 
-# Fix: kokoro-onnx installs onnxruntime (CPU) which conflicts with onnxruntime-gpu
-# Uninstall the CPU version and reinstall GPU version to ensure CUDA is available
-Write-Host "Ensuring GPU runtime is active..." -ForegroundColor Yellow
-& "$VenvPath\Scripts\pip.exe" uninstall -y onnxruntime 2>$null
-& "$VenvPath\Scripts\pip.exe" install onnxruntime-gpu --force-reinstall --no-deps -q
+# Install other dependencies
+Write-Host "Installing Backend Dependencies..." -ForegroundColor Yellow
+& "$VenvPath\Scripts\pip.exe" install -r "$BackendPath\requirements.txt" --upgrade -q
 
 Write-Host "Starting Backend Server..." -ForegroundColor Green
 Start-Process -FilePath "$VenvPath\Scripts\python.exe" -ArgumentList "main.py" -WorkingDirectory $BackendPath -NoNewWindow -PassThru

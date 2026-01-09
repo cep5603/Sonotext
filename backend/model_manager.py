@@ -1,188 +1,115 @@
 import os
+# Set HuggingFace cache to project directory for portability
+os.environ["HF_HOME"] = os.path.join(os.path.dirname(__file__), "hub")
+
 import logging
-import requests
-import numpy as np
-from kokoro_onnx import Kokoro
+import torch
+from kokoro import KPipeline
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("KokoroManager")
 
-# v1.0 model files from GitHub releases
-BASE_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
-VOICES_URL = f"{BASE_URL}/voices-v1.0.bin"
-VOICES_FILENAME = "voices-v1.0.bin"
-WEIGHTS_DIR = os.path.join(os.path.dirname(__file__), "weights")
+# Check CUDA availability
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+logger.info(f"Using device: {DEVICE}")
+if DEVICE == "cuda":
+    logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
 
-# Model precision options
-MODEL_VARIANTS = {
-    "fp32": {"filename": "kokoro-v1.0.onnx", "size": "310 MB", "gpu": False},
-    "fp16": {"filename": "kokoro-v1.0.fp16.onnx", "size": "169 MB", "gpu": False},
-    "fp16-gpu": {"filename": "kokoro-v1.0.fp16-gpu.onnx", "size": "169 MB", "gpu": True},
-    "int8": {"filename": "kokoro-v1.0.int8.onnx", "size": "88 MB", "gpu": False},
+# Language code mapping from voice prefix
+LANG_CODE_MAP = {
+    'a': 'a',  # American English
+    'b': 'b',  # British English
+    'j': 'j',  # Japanese
+    'z': 'z',  # Mandarin Chinese
+    'e': 'e',  # Spanish
+    'f': 'f',  # French
+    'h': 'h',  # Hindi
+    'i': 'i',  # Italian
+    'p': 'p',  # Portuguese
 }
+
+# Full voice list by language
+VOICES = {
+    "American English": [
+        "af_bella", "af_nova", "af_alloy", "af_aoede", "af_jessica", "af_kore",
+        "af_nicole", "af_river", "af_heart", "af_sarah", "af_sky",
+        "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael",
+        "am_onyx", "am_puck", "am_santa"
+    ],
+    "British English": [
+        "bf_alice", "bf_emma", "bf_isabella", "bf_lily",
+        "bm_daniel", "bm_fable", "bm_george", "bm_lewis"
+    ],
+    "Japanese": ["jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo"],
+    "Mandarin Chinese": [
+        "zf_xiaobei", "zf_xiaoni", "zf_xiaoxiao", "zf_xiaoyi",
+        "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang"
+    ],
+    "Spanish": ["ef_dora", "em_alex", "em_santa"],
+    "French": ["ff_siwis"],
+    "Hindi": ["hf_alpha", "hf_beta", "hm_omega", "hm_psi"],
+    "Italian": ["if_sara", "im_nicola"],
+    "Portuguese": ["pf_dora", "pm_alex", "pm_santa"]
+}
+
 
 class ModelManager:
     def __init__(self):
-        self.kokoro: Kokoro | None = None
+        self.pipelines: dict[str, KPipeline] = {}
         self.voices: list[str] = []
-        self.current_precision: str = "fp32"
-        self._load_saved_precision()
-        self.ensure_setup()
+        self._load_voices()
+        logger.info("ModelManager initialized.")
 
-    def _load_saved_precision(self):
-        """Load saved precision preference."""
-        config_path = os.path.join(WEIGHTS_DIR, "precision.txt")
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, 'r') as f:
-                    precision = f.read().strip()
-                    if precision in MODEL_VARIANTS:
-                        self.current_precision = precision
-            except Exception:
-                pass
+    def _load_voices(self):
+        """Flatten voice list from all languages."""
+        for lang_voices in VOICES.values():
+            self.voices.extend(lang_voices)
+        logger.info(f"Loaded {len(self.voices)} voices")
 
-    def _save_precision(self, precision: str):
-        """Save precision preference."""
-        os.makedirs(WEIGHTS_DIR, exist_ok=True)
-        config_path = os.path.join(WEIGHTS_DIR, "precision.txt")
-        with open(config_path, 'w') as f:
-            f.write(precision)
+    def _get_lang_code(self, voice: str) -> str:
+        """Get language code from voice prefix."""
+        if not voice:
+            return 'a'
+        prefix = voice[0]
+        return LANG_CODE_MAP.get(prefix, 'a')
 
-    def _download_file(self, url: str, dest_path: str):
-        """Download a file from URL with progress logging."""
-        logger.info(f"Downloading {url}...")
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
-        total_size = int(response.headers.get('content-length', 0))
-        
-        with open(dest_path, 'wb') as f:
-            downloaded = 0
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-                downloaded += len(chunk)
-                if total_size > 0:
-                    progress = (downloaded / total_size) * 100
-                    if downloaded % (10 * 1024 * 1024) < 8192:
-                        logger.info(f"Download progress: {progress:.1f}%")
-        
-        logger.info(f"Downloaded {dest_path}")
-
-    def get_precision_options(self) -> list[dict]:
-        """Get available precision options with their details."""
-        options = []
-        for key, info in MODEL_VARIANTS.items():
-            model_path = os.path.join(WEIGHTS_DIR, info["filename"])
-            options.append({
-                "id": key,
-                "filename": info["filename"],
-                "size": info["size"],
-                "gpu": info.get("gpu", False),
-                "downloaded": os.path.exists(model_path),
-                "active": key == self.current_precision
-            })
-        return options
-
-    def set_precision(self, precision: str) -> bool:
-        """Change model precision (downloads if needed, reloads model)."""
-        if precision not in MODEL_VARIANTS:
-            return False
-        
-        self.current_precision = precision
-        self._save_precision(precision)
-        self._load_model()
-        return True
-
-    def _load_model(self):
-        """Load the model with current precision setting."""
-        variant = MODEL_VARIANTS[self.current_precision]
-        model_filename = variant["filename"]
-        model_path = os.path.join(WEIGHTS_DIR, model_filename)
-        voices_path = os.path.join(WEIGHTS_DIR, VOICES_FILENAME)
-
-        # Download model if needed
-        if not os.path.exists(model_path):
-            model_url = f"{BASE_URL}/{model_filename}"
-            logger.info(f"Downloading {model_filename}...")
-            try:
-                self._download_file(model_url, model_path)
-            except Exception as e:
-                logger.error(f"Failed to download model: {e}")
-                raise
-
-        # Download voices if needed
-        if not os.path.exists(voices_path):
-            logger.info(f"Downloading {VOICES_FILENAME}...")
-            try:
-                self._download_file(VOICES_URL, voices_path)
-            except Exception as e:
-                logger.error(f"Failed to download voices: {e}")
-                raise
-
-        logger.info(f"Loading Kokoro ONNX model ({self.current_precision})...")
-        self.kokoro = Kokoro(model_path, voices_path)
-        
-        # Load available voices from the .bin file
-        try:
-            with np.load(voices_path) as data:
-                self.voices = list(data.files)
-            logger.info(f"Loaded {len(self.voices)} voices")
-        except Exception as e:
-            logger.warning(f"Could not load voice list from bin file: {e}")
-            self.voices = ["af_sarah", "af_sky", "am_adam", "am_michael"]
-        
-        logger.info("Model loaded successfully.")
-
-    def ensure_setup(self):
-        """Ensure necessary model files exist and load the model."""
-        os.makedirs(WEIGHTS_DIR, exist_ok=True)
-        self._load_model()
-
-    def _get_lang_for_voice(self, voice: str) -> str:
-        """Determine the language code based on voice prefix.
-        
-        Note: kokoro-onnx uses espeak-ng for phoneme conversion.
-        Not all languages are fully supported by espeak-ng.
-        Unsupported languages fall back to English phonemes.
-        """
-        # Voice naming: {lang_prefix}{gender}_{name}
-        # e.g., af_sarah = American Female, jm_kumo = Japanese Male
-        prefix = voice[0] if voice else 'a'
-        
-        # Only include languages supported by espeak-ng
-        # Languages like Japanese (j), Chinese (z) don't have good espeak support
-        # and the model handles them differently
-        lang_map = {
-            'a': 'en-us',  # American English
-            'b': 'en-gb',  # British English
-            'e': 'es',     # Spanish
-            'f': 'fr-fr',  # French
-            'h': 'hi',     # Hindi
-            'i': 'it',     # Italian
-            'p': 'pt-br',  # Brazilian Portuguese
-            # Japanese (j), Chinese (z) - use en-us as fallback, 
-            # model uses internal phonemes for these
-            'j': 'en-us',
-            'z': 'en-us',
-        }
-        return lang_map.get(prefix, 'en-us')
+    def _get_pipeline(self, lang_code: str) -> KPipeline:
+        """Get or create a pipeline for the given language code."""
+        if lang_code not in self.pipelines:
+            logger.info(f"Creating pipeline for lang_code: {lang_code}")
+            self.pipelines[lang_code] = KPipeline(lang_code=lang_code)
+        return self.pipelines[lang_code]
 
     def generate_audio(self, text: str, voice: str, speed: float = 1.0, lang_override: str | None = None):
-        if not self.kokoro:
-            raise RuntimeError("Model not initialized.")
-        
         if voice not in self.voices:
             logger.warning(f"Voice {voice} not found. Using default 'af_sarah'.")
             voice = "af_sarah"
 
-        # Use override if provided, otherwise auto-detect from voice
-        lang = lang_override if lang_override else self._get_lang_for_voice(voice)
-        samples, sample_rate = self.kokoro.create(
-            text, 
-            voice=voice, 
-            speed=speed, 
-            lang=lang
-        )
-        return samples, sample_rate
+        # Determine language code
+        if lang_override:
+            # Map espeak codes to kokoro lang codes
+            espeak_to_kokoro = {
+                'en-us': 'a', 'en-gb': 'b', 'es': 'e', 
+                'fr-fr': 'f', 'hi': 'h', 'it': 'i', 'pt-br': 'p'
+            }
+            lang_code = espeak_to_kokoro.get(lang_override, self._get_lang_code(voice))
+        else:
+            lang_code = self._get_lang_code(voice)
+
+        pipeline = self._get_pipeline(lang_code)
+        
+        # Generate audio using the pipeline
+        audio_data = None
+        for gs, ps, audio in pipeline(text, voice=voice, speed=speed):
+            if audio is not None and len(audio) > 0:
+                audio_data = audio
+                break  # Take first valid output
+        
+        if audio_data is None:
+            raise RuntimeError("Failed to generate audio")
+        
+        return audio_data, 24000  # Kokoro uses 24kHz sample rate
+
 
 model_manager = ModelManager()

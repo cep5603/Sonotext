@@ -10,8 +10,8 @@ __pycache__/
 *$py.class
 *.pyo
 
-# Model weights (large binary files)
-weights/
+# Model weights
+hub/
 
 # Generated outputs
 outputs/

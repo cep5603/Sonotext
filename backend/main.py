@@ -67,24 +67,6 @@ def get_voices():
         return []
     return model_manager.voices
 
-@app.get("/api/model-precision")
-def get_model_precision():
-    """Get available model precision options."""
-    return {
-        "options": model_manager.get_precision_options(),
-        "current": model_manager.current_precision
-    }
-
-class SetPrecisionRequest(BaseModel):
-    precision: str
-
-@app.post("/api/model-precision")
-def set_model_precision(req: SetPrecisionRequest):
-    """Set model precision (fp32, fp16, or int8)."""
-    if model_manager.set_precision(req.precision):
-        return {"status": "success", "precision": req.precision}
-    return {"status": "error", "message": "Invalid precision"}
-
 @app.get("/api/llm-status")
 def get_llm_status():
     """Check if LM Studio is available and get current model."""
