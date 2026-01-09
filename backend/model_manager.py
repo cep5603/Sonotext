@@ -83,8 +83,8 @@ class ModelManager:
 
     def generate_audio(self, text: str, voice: str, speed: float = 1.0, lang_override: str | None = None):
         if voice not in self.voices:
-            logger.warning(f"Voice {voice} not found. Using default 'af_sarah'.")
-            voice = "af_sarah"
+            logger.warning(f"Voice {voice} not found. Using default 'af_heart'.")
+            voice = "af_heart"
 
         # Determine language code
         if lang_override:

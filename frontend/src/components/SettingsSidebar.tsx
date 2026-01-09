@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { Loader2, Power, Circle } from "lucide-react"
+import { Loader2, Power, Circle, RefreshCw } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
@@ -45,7 +45,7 @@ export function SettingsSidebar({
 }: SettingsSidebarProps) {
     const queryClient = useQueryClient()
 
-    // LLM model status
+    // LLM status
     const { data: modelStatus } = useQuery({
         queryKey: ["llm-model-status"],
         queryFn: async () => {
@@ -53,6 +53,7 @@ export function SettingsSidebar({
             return res.data as { model: string; status: string }
         },
         refetchInterval: 5000,
+        staleTime: 0,
     })
 
     const unloadMutation = useMutation({
@@ -133,7 +134,22 @@ export function SettingsSidebar({
                 {/* Text Processing Settings */}
                 <div className="space-y-4">
                     <div className="space-y-2">
-                        <Label>Text Model</Label>
+                        <div className="flex items-center justify-between">
+                            <Label>Text Model</Label>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => {
+                                    queryClient.invalidateQueries({ queryKey: ["llm-status"] })
+                                    queryClient.invalidateQueries({ queryKey: ["llm-models"] })
+                                    queryClient.invalidateQueries({ queryKey: ["llm-model-status"] })
+                                }}
+                                title="Refresh LLM status"
+                            >
+                                <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                            </Button>
+                        </div>
                         <LLMModelSelector />
                     </div>
 

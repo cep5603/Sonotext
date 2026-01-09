@@ -33,7 +33,7 @@ app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
 
 class GenerateRequest(BaseModel):
     text: str
-    voice: str = "af_sarah"
+    voice: str = "af_heart"
     speed: float = 1.0
     lang: str | None = None  # None means auto-detect from voice
 
@@ -78,7 +78,7 @@ def get_llm_status():
 
 @app.get("/api/llm-models")
 def get_llm_models():
-    """Get list of available LLM models."""
+    """Get list of available LLMs."""
     models = llm_service.get_available_models()
     return {"models": models, "currentModel": llm_service.get_current_model()}
 
@@ -87,7 +87,7 @@ class SetModelRequest(BaseModel):
 
 @app.post("/api/llm-model")
 def set_llm_model(req: SetModelRequest):
-    """Set the LLM model to use."""
+    """Set the LLM to use."""
     llm_service.set_current_model(req.model)
     return {"status": "success", "model": req.model}
 
@@ -100,7 +100,7 @@ def get_llm_model_status():
 
 @app.post("/api/llm-unload")
 def unload_llm_model():
-    """Unload the current LLM model."""
+    """Unload the current LLM."""
     current_model = llm_service.get_current_model()
     success = llm_service.unload_model(current_model)
     return {"status": "success" if success else "failed", "model": current_model}
@@ -114,6 +114,50 @@ def get_history():
 def delete_history(entry_id: str):
     history_manager.delete_entry(entry_id)
     return {"status": "success"}
+
+class RenameRequest(BaseModel):
+    name: str
+
+@app.post("/api/history/{entry_id}/rename")
+def rename_history_entry(entry_id: str, req: RenameRequest):
+    """Rename a history entry."""
+    if not req.name or not req.name.strip():
+        raise HTTPException(status_code=400, detail="Name cannot be empty")
+    
+    result = history_manager.rename_entry(entry_id, req.name)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Entry not found or rename failed")
+    
+    return result
+
+@app.post("/api/history/{entry_id}/auto-rename")
+def auto_rename_history_entry(entry_id: str):
+    """Auto-rename a history entry using LLM to generate a descriptive filename."""
+    # Find the entry to get its text
+    history = history_manager.get_history()
+    entry = next((e for e in history if e["id"] == entry_id), None)
+    
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    
+    if not entry.get("text"):
+        raise HTTPException(status_code=400, detail="Entry has no text content")
+    
+    # Check if LLM is available
+    if not llm_service.check_llm_available():
+        raise HTTPException(status_code=503, detail="LLM service not available")
+    
+    # Generate filename using LLM
+    generated_name = llm_service.generate_filename(entry["text"])
+    if not generated_name:
+        raise HTTPException(status_code=500, detail="Failed to generate filename")
+    
+    # Rename the entry
+    result = history_manager.rename_entry(entry_id, generated_name)
+    if result is None:
+        raise HTTPException(status_code=500, detail="Rename operation failed")
+    
+    return result
 
 @app.post("/api/generate")
 async def generate_audio(req: GenerateRequest):

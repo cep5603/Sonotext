@@ -27,21 +27,16 @@ def set_current_model(model: str) -> None:
     """Set the model to use for LLM operations."""
     global _current_model
     _current_model = model
-    logger.info(f"LLM model set to: {model}")
+    logger.info(f"LLM set to: {model}")
 
 
-def slugify(text: str, max_length: int = 50) -> str:
+def slugify(text: str, max_length: int = 80) -> str:
     """Convert text to a valid filename slug."""
-    # Lowercase
     text = text.lower()
-    # Replace spaces and underscores with hyphens
-    text = re.sub(r'[\s_]+', '-', text)
-    # Remove any non-alphanumeric characters except hyphens
-    text = re.sub(r'[^a-z0-9\-]', '', text)
-    # Remove multiple consecutive hyphens
-    text = re.sub(r'-+', '-', text)
-    # Remove leading/trailing hyphens
-    text = text.strip('-')
+    text = re.sub(r'[\s_]+', '-', text) # Replace spaces and underscores with hyphens
+    text = re.sub(r'[^a-z0-9\-]', '', text) # Remove any non-alphanumeric characters except hyphens
+    text = re.sub(r'-+', '-', text) # Remove multiple consecutive hyphens
+    text = text.strip('-') # Remove leading/trailing hyphens
     # Truncate to max length
     if len(text) > max_length:
         text = text[:max_length].rsplit('-', 1)[0]
@@ -51,7 +46,7 @@ def slugify(text: str, max_length: int = 50) -> str:
 def check_llm_available() -> bool:
     """Check if LM Studio server is running and accessible."""
     try:
-        with httpx.Client(timeout=5.0) as client:
+        with httpx.Client(timeout=1.0) as client:
             response = client.get(f"{LM_STUDIO_URL}/api/v0/models")
             return response.status_code == 200
     except Exception:
@@ -59,7 +54,7 @@ def check_llm_available() -> bool:
 
 
 def get_available_models() -> list[dict]:
-    """Get list of available LLM models from LM Studio."""
+    """Get list of available LLMs from LM Studio."""
     try:
         with httpx.Client(timeout=10.0) as client:
             response = client.get(f"{LM_STUDIO_URL}/api/v0/models")
@@ -86,7 +81,7 @@ def get_available_models() -> list[dict]:
 def get_model_status(model_id: str) -> str:
     """Get the loading status of a specific model. Returns 'loaded', 'loading', or 'not-loaded'."""
     try:
-        with httpx.Client(timeout=10.0) as client:
+        with httpx.Client(timeout=1.0) as client:
             # URL encode the model_id for path
             encoded_id = model_id.replace("/", "%2F")
             response = client.get(f"{LM_STUDIO_URL}/api/v0/models/{encoded_id}")
@@ -174,7 +169,6 @@ def generate_filename(text: str) -> Optional[str]:
                 content = data["choices"][0]["message"]["content"]
                 parsed = json.loads(content)
                 raw_filename = parsed.get("filename", "")
-                # Slugify to ensure valid filename
                 return slugify(raw_filename)
             else:
                 logger.warning(f"LLM request failed: {response.status_code}")
@@ -199,15 +193,14 @@ def cleanup_text_chunk(chunk: str) -> str:
                     "messages": [
                         {
                             "role": "system",
-                            "content": """Clean the following text for text-to-speech reading. Remove:
-- Page numbers and headers/footers
+                            "content": """Clean the following text for text-to-speech reading. You must REMOVE all of the following:
 - Markdown formatting (**, *, #, ```, etc.)
-- URLs and email addresses
+- Page numbers and headers/footers
 - Reference numbers like [1], (2), etc.
 - Figure/table captions like "Fig. 1" or "Table 2"
 - Excessive whitespace and blank lines
 
-Keep the natural reading flow and all meaningful content. Output ONLY the cleaned text, nothing else."""
+Keep the natural reading flow and all meaningful content. Ensure you remove bold and italicized text formatting. Output ONLY the cleaned text, nothing else."""
                         },
                         {
                             "role": "user",

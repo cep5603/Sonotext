@@ -17,6 +17,7 @@ import { HistorySidebar } from "./HistorySidebar"
 import { SettingsSidebar } from "./SettingsSidebar"
 import type { HistoryItem } from "@/types"
 import { cn } from "@/lib/utils"
+import { getVoiceInfo, getVoiceLanguage } from "@/lib/voiceData"
 
 function formatDuration(seconds?: number): string {
     if (!seconds) return "--:--"
@@ -25,9 +26,23 @@ function formatDuration(seconds?: number): string {
     return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-export function TextToSpeech() {
+function formatVoiceDisplay(voiceId: string): string {
+    const voice = getVoiceInfo(voiceId)
+    const lang = getVoiceLanguage(voiceId)
+    if (voice && lang) {
+        return `${lang.flag} ${voice.name}`
+    }
+    return voiceId
+}
+
+interface TextToSpeechProps {
+    selectedItem: HistoryItem | null
+    onSelectedItemChange: (item: HistoryItem | null) => void
+}
+
+export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeechProps) {
     const [text, setText] = useState("")
-    const [voice, setVoice] = useState("af_sarah")
+    const [voice, setVoice] = useState("af_heart")
     const [lang, setLang] = useState<string | null>(null)  // null = auto-detect
     const [speed, setSpeed] = useState([1.0])
     const [audioUrl, setAudioUrl] = useState<string | null>(null)
@@ -37,7 +52,6 @@ export function TextToSpeech() {
     const [progress, setProgress] = useState(0)
     const [progressText, setProgressText] = useState("")
     const [error, setError] = useState<string | null>(null)
-    const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null)
     const [shouldAutoplay, setShouldAutoplay] = useState(false)
     // Text cleanup state
     const [isCleaning, setIsCleaning] = useState(false)
@@ -235,14 +249,14 @@ export function TextToSpeech() {
             setShouldAutoplay(true)
             return
         }
-        setSelectedItem(item)
+        onSelectedItemChange(item)
         setAudioUrl(`http://localhost:8000${item.url}`)
         setAudioFilename(item.filename)
         setShouldAutoplay(autoplay)
     }
 
     const handleBackToGenerator = () => {
-        setSelectedItem(null)
+        onSelectedItemChange(null)
     }
 
     return (
@@ -269,8 +283,15 @@ export function TextToSpeech() {
                                     </Button>
                                 </div>
 
+                                {/* Filename title */}
+                                <h2 className="text-xl font-semibold tracking-tight">
+                                    {selectedItem.filename
+                                        .split('/').pop()?.replace(/\.wav$/, '').replace(/-[a-f0-9]{8}$/, '').replace(/-/g, ' ')
+                                        || 'Untitled'}
+                                </h2>
+
                                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                    <span className="font-medium text-foreground">{selectedItem.voice}</span>
+                                    <span className="font-medium text-foreground">{formatVoiceDisplay(selectedItem.voice)}</span>
                                     <span>•</span>
                                     <span>{selectedItem.speed}x</span>
                                     <span>•</span>

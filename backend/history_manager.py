@@ -102,4 +102,62 @@ class HistoryManager:
             self._save_history(history)
         return updated
 
+    def rename_entry(self, entry_id: str, new_name: str) -> Dict | None:
+        """Rename a history entry, preserving UUID suffix."""
+        import re
+        
+        # Sanitize the new name: remove invalid chars, collapse whitespace
+        sanitized = re.sub(r'[\\/:*?"<>|]', '', new_name)
+        sanitized = re.sub(r'\s+', '-', sanitized.strip())
+        sanitized = re.sub(r'-+', '-', sanitized)  # Collapse multiple hyphens
+        sanitized = sanitized.strip('-')  # Remove leading/trailing hyphens
+        
+        if not sanitized:
+            return None  # Empty name after sanitization
+        
+        # Truncate to 100 chars
+        sanitized = sanitized[:100]
+        
+        history = self._load_history()
+        for entry in history:
+            if entry["id"] == entry_id:
+                old_filename = entry["filename"]
+                old_path = self.get_output_path(old_filename)
+                
+                if not os.path.exists(old_path):
+                    return None
+                
+                # Parse old filename: "YYYY-MM-DD/name-uuid.wav"
+                parts = old_filename.split("/")
+                date_folder = parts[0] if len(parts) > 1 else self._get_date_folder()
+                basename = parts[-1]
+                
+                # Extract UUID suffix (last 8 hex chars before .wav)
+                uuid_match = re.search(r'-([a-f0-9]{8})\.wav$', basename)
+                if uuid_match:
+                    uuid_suffix = uuid_match.group(1)
+                else:
+                    # No UUID found, generate new one
+                    uuid_suffix = str(uuid.uuid4())[:8]
+                
+                # Build new filename
+                new_filename_base = f"{sanitized}-{uuid_suffix}.wav"
+                new_relative_path = f"{date_folder}/{new_filename_base}"
+                new_path = self.get_output_path(new_relative_path)
+                
+                # Rename file on disk
+                try:
+                    os.rename(old_path, new_path)
+                except Exception as e:
+                    logging.error(f"Failed to rename file: {e}")
+                    return None
+                
+                # Update entry
+                entry["filename"] = new_relative_path
+                entry["url"] = f"/outputs/{new_relative_path}"
+                self._save_history(history)
+                return entry
+        
+        return None
+
 history_manager = HistoryManager()

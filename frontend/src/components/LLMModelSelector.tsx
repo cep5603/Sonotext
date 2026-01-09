@@ -60,7 +60,7 @@ export function LLMModelSelector() {
         return (
             <Select disabled>
                 <SelectTrigger className="w-full">
-                    <SelectValue placeholder="No LLM models available" />
+                    <SelectValue placeholder="No LLMs available" />
                 </SelectTrigger>
             </Select>
         )
@@ -72,7 +72,7 @@ export function LLMModelSelector() {
             onValueChange={(value) => setModelMutation.mutate(value)}
         >
             <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select LLM model" />
+                <SelectValue placeholder="Select LLM" />
             </SelectTrigger>
             <SelectContent>
                 {data.models.map((model) => (
