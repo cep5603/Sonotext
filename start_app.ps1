@@ -12,10 +12,13 @@ if (-not (Test-Path "$VenvPath\Scripts\python.exe")) {
 
 # Activate venv and install dependencies
 Write-Host "Installing Backend Dependencies..." -ForegroundColor Yellow
-& "$VenvPath\Scripts\pip.exe" uninstall -y onnxruntime 2>$null
 & "$VenvPath\Scripts\pip.exe" install -r "$BackendPath\requirements.txt" --upgrade
 
-$env:ONNX_PROVIDER = 'CUDAExecutionProvider'
+# Fix: kokoro-onnx installs onnxruntime (CPU) which conflicts with onnxruntime-gpu
+# Uninstall the CPU version and reinstall GPU version to ensure CUDA is available
+Write-Host "Ensuring GPU runtime is active..." -ForegroundColor Yellow
+& "$VenvPath\Scripts\pip.exe" uninstall -y onnxruntime 2>$null
+& "$VenvPath\Scripts\pip.exe" install onnxruntime-gpu --force-reinstall --no-deps -q
 
 Write-Host "Starting Backend Server..." -ForegroundColor Green
 Start-Process -FilePath "$VenvPath\Scripts\python.exe" -ArgumentList "main.py" -WorkingDirectory $BackendPath -NoNewWindow -PassThru

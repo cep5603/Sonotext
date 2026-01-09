@@ -35,6 +35,7 @@ class GenerateRequest(BaseModel):
     text: str
     voice: str = "af_sarah"
     speed: float = 1.0
+    lang: str | None = None  # None means auto-detect from voice
 
 class CleanupRequest(BaseModel):
     text: str
@@ -64,7 +65,25 @@ def get_voices():
     """Return available voice IDs."""
     if not model_manager.voices:
         return []
-    return list(model_manager.voices.keys())
+    return model_manager.voices
+
+@app.get("/api/model-precision")
+def get_model_precision():
+    """Get available model precision options."""
+    return {
+        "options": model_manager.get_precision_options(),
+        "current": model_manager.current_precision
+    }
+
+class SetPrecisionRequest(BaseModel):
+    precision: str
+
+@app.post("/api/model-precision")
+def set_model_precision(req: SetPrecisionRequest):
+    """Set model precision (fp32, fp16, or int8)."""
+    if model_manager.set_precision(req.precision):
+        return {"status": "success", "precision": req.precision}
+    return {"status": "error", "message": "Invalid precision"}
 
 @app.get("/api/llm-status")
 def get_llm_status():
@@ -132,7 +151,7 @@ async def generate_audio(req: GenerateRequest):
                     "data": json.dumps({"progress": progress, "chunk": i + 1, "total": total_chunks})
                 }
                 
-                samples, sr = model_manager.generate_audio(chunk, req.voice, req.speed)
+                samples, sr = model_manager.generate_audio(chunk, req.voice, req.speed, req.lang)
                 all_samples.append(samples)
                 sample_rate = sr
                 

@@ -28,6 +28,7 @@ function formatDuration(seconds?: number): string {
 export function TextToSpeech() {
     const [text, setText] = useState("")
     const [voice, setVoice] = useState("af_sarah")
+    const [lang, setLang] = useState<string | null>(null)  // null = auto-detect
     const [speed, setSpeed] = useState([1.0])
     const [audioUrl, setAudioUrl] = useState<string | null>(null)
     const [audioFilename, setAudioFilename] = useState<string | undefined>(undefined)
@@ -42,6 +43,9 @@ export function TextToSpeech() {
     const [isCleaning, setIsCleaning] = useState(false)
     const [cleanupProgress, setCleanupProgress] = useState(0)
     const [cleanupProgressText, setCleanupProgressText] = useState("")
+    // Timing stats
+    const [generationStats, setGenerationStats] = useState<{ totalSeconds: number; avgPerChunk: number } | null>(null)
+    const [cleanupStats, setCleanupStats] = useState<{ totalSeconds: number; avgPerChunk: number } | null>(null)
     const queryClient = useQueryClient()
 
     const handleGenerate = useCallback(async () => {
@@ -49,12 +53,15 @@ export function TextToSpeech() {
         setProgress(0)
         setProgressText("Starting synthesis...")
         setError(null)
+        setGenerationStats(null)
+        const startTime = performance.now()
+        let totalChunks = 0
 
         try {
             const response = await fetch("http://localhost:8000/api/generate", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text, voice, speed: speed[0] }),
+                body: JSON.stringify({ text, voice, speed: speed[0], lang }),
             })
 
             const reader = response.body?.getReader()
@@ -78,7 +85,14 @@ export function TextToSpeech() {
                         if (data.progress !== undefined) {
                             setProgress(data.progress)
                             setProgressText(`Synthesizing chunk ${data.chunk} of ${data.total}...`)
+                            totalChunks = data.total
                         } else if (data.url) {
+                            const endTime = performance.now()
+                            const totalSeconds = (endTime - startTime) / 1000
+                            setGenerationStats({
+                                totalSeconds,
+                                avgPerChunk: totalChunks > 0 ? totalSeconds / totalChunks : 0
+                            })
                             setAudioUrl(`http://localhost:8000${data.url}`)
                             setAudioFilename(data.filename)
                             queryClient.invalidateQueries({ queryKey: ["history"] })
@@ -95,13 +109,16 @@ export function TextToSpeech() {
         } finally {
             setIsGenerating(false)
         }
-    }, [text, voice, speed, queryClient])
+    }, [text, voice, lang, speed, queryClient])
 
     const handleCleanText = useCallback(async () => {
         setIsCleaning(true)
         setCleanupProgress(0)
         setCleanupProgressText("Starting cleanup...")
         setError(null)
+        setCleanupStats(null)
+        const startTime = performance.now()
+        let totalChunks = 0
 
         try {
             const response = await fetch("http://localhost:8000/api/cleanup-text", {
@@ -131,7 +148,14 @@ export function TextToSpeech() {
                         if (data.progress !== undefined) {
                             setCleanupProgress(data.progress)
                             setCleanupProgressText(`Cleaning chunk ${data.chunk} of ${data.total}...`)
+                            totalChunks = data.total
                         } else if (data.text !== undefined) {
+                            const endTime = performance.now()
+                            const totalSeconds = (endTime - startTime) / 1000
+                            setCleanupStats({
+                                totalSeconds,
+                                avgPerChunk: totalChunks > 0 ? totalSeconds / totalChunks : 0
+                            })
                             setText(data.text)
                             setCleanupProgress(100)
                             setCleanupProgressText("Complete!")
@@ -226,6 +250,8 @@ export function TextToSpeech() {
             <SettingsSidebar
                 voice={voice}
                 onVoiceChange={setVoice}
+                lang={lang}
+                onLangChange={setLang}
                 speed={speed}
                 onSpeedChange={setSpeed}
             />
@@ -305,13 +331,18 @@ export function TextToSpeech() {
                                 </div>
 
                                 {/* Cleanup Progress Bar */}
-                                {isCleaning && (
+                                {(isCleaning || cleanupStats) && (
                                     <div className="space-y-2 animate-in fade-in duration-300 flex-shrink-0">
                                         <div className="flex justify-between text-sm text-muted-foreground">
                                             <span>{cleanupProgressText}</span>
                                             <span>{cleanupProgress}%</span>
                                         </div>
                                         <Progress value={cleanupProgress} className="h-2" />
+                                        {cleanupStats && !isCleaning && (
+                                            <div className="text-xs text-muted-foreground text-right">
+                                                {cleanupStats.totalSeconds.toFixed(2)}s total • {cleanupStats.avgPerChunk.toFixed(2)}s/chunk
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
@@ -372,13 +403,18 @@ export function TextToSpeech() {
                                 </div>
 
                                 {/* Progress Bar */}
-                                {isGenerating && (
+                                {(isGenerating || generationStats) && (
                                     <div className="space-y-2 animate-in fade-in duration-300 flex-shrink-0">
                                         <div className="flex justify-between text-sm text-muted-foreground">
                                             <span>{progressText}</span>
                                             <span>{progress}%</span>
                                         </div>
                                         <Progress value={progress} className="h-2" />
+                                        {generationStats && !isGenerating && (
+                                            <div className="text-xs text-muted-foreground text-right">
+                                                {generationStats.totalSeconds.toFixed(2)}s total • {generationStats.avgPerChunk.toFixed(2)}s/chunk
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
