@@ -368,25 +368,42 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                                 )}
 
                                 <div className="flex justify-end gap-3 flex-shrink-0">
-                                    <Button
-                                        variant="secondary"
-                                        size="lg"
-                                        className="h-12"
-                                        onClick={handleCleanText}
-                                        disabled={!text || isCleaning || isGenerating}
-                                    >
-                                        {isCleaning ? (
-                                            <>
-                                                <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                                                Cleaning...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Sparkles className="h-5 w-5 mr-2" />
-                                                Clean Text
-                                            </>
-                                        )}
-                                    </Button>
+                                    <div className="flex">
+                                        <Button
+                                            variant="secondary"
+                                            size="lg"
+                                            className="h-12 text-lg rounded-r-none"
+                                            onClick={() => setText(text.replace(/[*#]/g, ''))}
+                                            disabled={!text || isCleaning || isGenerating}
+                                        >
+                                            {isCleaning ? (
+                                                <>
+                                                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                                    Cleaning...
+                                                </>
+                                            ) : (
+                                                "Clean Text"
+                                            )}
+                                        </Button>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button
+                                                    variant="secondary"
+                                                    size="lg"
+                                                    className="h-12 px-2 rounded-l-none border-l border-secondary-foreground/20"
+                                                    disabled={!text || isCleaning || isGenerating}
+                                                >
+                                                    <ChevronDown className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onClick={handleCleanText}>
+                                                    <Sparkles className="mr-2 h-4 w-4" />
+                                                    LLM Clean
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
                                     <div className="flex">
                                         <Button
                                             size="lg"
@@ -416,7 +433,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuItem onClick={handleCleanAndGenerate}>
                                                     <Sparkles className="mr-2 h-4 w-4" />
-                                                    Clean & Generate
+                                                    LLM Clean & Generate
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
