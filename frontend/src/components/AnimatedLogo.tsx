@@ -60,17 +60,28 @@ export function AnimatedLogo({ onClick }: AnimatedLogoProps) {
                     {TEXT.split("").map((char, index) => (
                         <motion.span
                             key={index}
-                            initial={{ opacity: 0, y: 4 }}
+                            className="inline-block"
+                            initial={{ opacity: 0, y: 6 }}
                             animate={{
                                 opacity: isHovered ? 1 : 0,
-                                y: isHovered ? 0 : 4,
+                                y: isHovered ? [6, -4, 2, 0] : 6,
                             }}
                             transition={{
-                                duration: 0.15,
-                                delay: isHovered
-                                    ? 0.05 + index * 0.03 // Stagger in
-                                    : (TEXT.length - index - 1) * 0.02, // Reverse stagger out
-                                ease: "easeOut",
+                                opacity: {
+                                    duration: 0.2,
+                                    delay: isHovered
+                                        ? 0.05 + index * 0.05
+                                        : (TEXT.length - index - 1) * 0.025,
+                                    ease: "easeOut",
+                                },
+                                y: {
+                                    duration: 0.6,
+                                    delay: isHovered
+                                        ? 0.05 + index * 0.05
+                                        : (TEXT.length - index - 1) * 0.025,
+                                    ease: [0.22, 1, 0.36, 1],
+                                    times: [0, 0.35, 0.65, 1],
+                                },
                             }}
                         >
                             {char}

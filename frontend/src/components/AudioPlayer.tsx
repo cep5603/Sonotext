@@ -64,8 +64,8 @@ export function AudioPlayer({ audioUrl, filename, autoplay, onPlayStarted }: Aud
         const ws = WaveSurfer.create({
             container: containerRef.current,
             waveColor: 'rgb(200, 200, 200)',
-            progressColor: 'rgb(100, 100, 255)',
-            cursorColor: 'rgb(100, 100, 255)',
+            progressColor: 'rgb(101, 165, 255)',
+            cursorColor: 'rgb(101, 165, 255)',
             barWidth: 2,
             barGap: 1,
             height: 80,

@@ -16,7 +16,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
-        <header className="text-center py-4 shrink-0">
+        <header className="text-center py-4 shrink-0 border-b border-border">
           <AnimatedLogo onClick={handleLogoClick} />
         </header>
         <main className="flex-1 w-full min-h-0">
