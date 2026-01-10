@@ -1,10 +1,11 @@
 import os
-# Set HuggingFace cache to project directory for portability
-os.environ["HF_HOME"] = os.path.join(os.path.dirname(__file__), "hub")
-
 import logging
+import numpy as np
 import torch
 from kokoro import KPipeline
+
+# Set HuggingFace cache to project directory for portability
+os.environ["HF_HOME"] = os.path.join(os.path.dirname(__file__), "hub")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -99,15 +100,16 @@ class ModelManager:
 
         pipeline = self._get_pipeline(lang_code)
         
-        # Generate audio using the pipeline
-        audio_data = None
+        # Generate audio using the pipeline (collect all segments)
+        audio_segments = []
         for gs, ps, audio in pipeline(text, voice=voice, speed=speed):
             if audio is not None and len(audio) > 0:
-                audio_data = audio
-                break  # Take first valid output
+                audio_segments.append(audio)
         
-        if audio_data is None:
+        if not audio_segments:
             raise RuntimeError("Failed to generate audio")
+        
+        audio_data = np.concatenate(audio_segments)
         
         return audio_data, 24000  # Kokoro uses 24kHz sample rate
 
