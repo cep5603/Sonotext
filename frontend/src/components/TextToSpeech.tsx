@@ -1,7 +1,7 @@
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { Loader2, UploadCloud, FileText, ArrowLeft, Clock, Sparkles, ChevronDown } from "lucide-react"
+import { Loader2, UploadCloud, FileText, ArrowLeft, Clock, Sparkles, ChevronDown, ScrollText } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -13,9 +13,10 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { AudioPlayer } from "./AudioPlayer"
+import { SyncedTextView } from "./SyncedTextView"
 import { HistorySidebar } from "./HistorySidebar"
 import { SettingsSidebar } from "./SettingsSidebar"
-import type { HistoryItem } from "@/types"
+import type { HistoryItem, WordTiming } from "@/types"
 import { cn } from "@/lib/utils"
 import { getVoiceInfo, getVoiceLanguage } from "@/lib/voiceData"
 
@@ -60,6 +61,13 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
     // Timing stats
     const [generationStats, setGenerationStats] = useState<{ totalSeconds: number; avgPerChunk: number } | null>(null)
     const [cleanupStats, setCleanupStats] = useState<{ totalSeconds: number; avgPerChunk: number } | null>(null)
+    // Audio-text sync state
+    const [alignmentData, setAlignmentData] = useState<WordTiming[] | null>(null)
+    const [audioCurrentTime, setAudioCurrentTime] = useState(0)
+    const [isAudioPlaying, setIsAudioPlaying] = useState(false)
+    const [seekToTime, setSeekToTime] = useState<number | null>(null)
+    const [isLoadingAlignment, setIsLoadingAlignment] = useState(false)
+    const [autoScroll, setAutoScroll] = useState(true)
     const queryClient = useQueryClient()
 
     const handleGenerate = useCallback(async () => {
@@ -253,11 +261,46 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
         setAudioUrl(`http://localhost:8000${item.url}`)
         setAudioFilename(item.filename)
         setShouldAutoplay(autoplay)
+        // Reset alignment state for new item
+        setAlignmentData(null)
+        setSeekToTime(null)
     }
 
     const handleBackToGenerator = () => {
         onSelectedItemChange(null)
+        setAlignmentData(null)
+        setSeekToTime(null)
     }
+
+    // Fetch alignment data when a history item is selected
+    useEffect(() => {
+        if (!selectedItem) return
+
+        const fetchAlignment = async () => {
+            setIsLoadingAlignment(true)
+            try {
+                const response = await fetch(`http://localhost:8000/api/alignment/${selectedItem.id}`)
+                if (response.ok) {
+                    const data = await response.json()
+                    setAlignmentData(data.words)
+                }
+            } catch (error) {
+                console.error("Failed to fetch alignment:", error)
+                // Silently fail - we'll just show plain text
+            } finally {
+                setIsLoadingAlignment(false)
+            }
+        }
+
+        fetchAlignment()
+    }, [selectedItem?.id])
+
+    // Handle seek requests from SyncedTextView
+    const handleSeek = useCallback((time: number) => {
+        setSeekToTime(time)
+        // Reset after a short delay to allow repeated seeks to the same time
+        setTimeout(() => setSeekToTime(null), 100)
+    }, [])
 
     return (
         <div className="flex w-full h-full">
@@ -290,26 +333,48 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                                         || 'Untitled'}
                                 </h2>
 
-                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                    <span className="font-medium text-foreground">{formatVoiceDisplay(selectedItem.voice)}</span>
-                                    <span>•</span>
-                                    <span>{selectedItem.speed}x</span>
-                                    <span>•</span>
-                                    <span className="flex items-center gap-1">
-                                        <Clock className="h-3 w-3" />
-                                        {formatDuration(selectedItem.duration)}
-                                    </span>
-                                    <span>•</span>
-                                    <span>{new Date(selectedItem.timestamp * 1000).toLocaleString()}</span>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                        <span className="font-medium text-foreground">{formatVoiceDisplay(selectedItem.voice)}</span>
+                                        <span>•</span>
+                                        <span>{selectedItem.speed}x</span>
+                                        <span>•</span>
+                                        <span className="flex items-center gap-1">
+                                            <Clock className="h-3 w-3" />
+                                            {formatDuration(selectedItem.duration)}
+                                        </span>
+                                        <span>•</span>
+                                        <span>{new Date(selectedItem.timestamp * 1000).toLocaleString()}</span>
+                                    </div>
+                                    <Button
+                                        variant={autoScroll ? "secondary" : "ghost"}
+                                        size="sm"
+                                        onClick={() => setAutoScroll(!autoScroll)}
+                                        className="gap-2 text-xs"
+                                    >
+                                        <ScrollText className="h-3 w-3" />
+                                        Auto-scroll {autoScroll ? "on" : "off"}
+                                    </Button>
                                 </div>
 
-                                <div className="flex-1 min-h-0 rounded-lg border bg-muted/30 overflow-y-auto p-4">
-                                    <p className="text-base leading-relaxed whitespace-pre-wrap">
-                                        {selectedItem.text}
-                                    </p>
-                                </div>
+                                <SyncedTextView
+                                    text={selectedItem.text}
+                                    alignmentData={alignmentData}
+                                    currentTime={audioCurrentTime}
+                                    onSeek={handleSeek}
+                                    isPlaying={isAudioPlaying}
+                                    autoScroll={autoScroll}
+                                />
 
-                                <AudioPlayer audioUrl={audioUrl} filename={audioFilename} autoplay={shouldAutoplay} onPlayStarted={() => setShouldAutoplay(false)} />
+                                <AudioPlayer
+                                    audioUrl={audioUrl}
+                                    filename={audioFilename}
+                                    autoplay={shouldAutoplay}
+                                    onPlayStarted={() => setShouldAutoplay(false)}
+                                    onTimeUpdate={setAudioCurrentTime}
+                                    onPlayingChange={setIsAudioPlaying}
+                                    seekToTime={seekToTime}
+                                />
                             </div>
                         ) : (
                             /* Generator View - normal text input and controls */

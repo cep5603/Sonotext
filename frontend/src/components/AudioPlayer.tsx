@@ -8,6 +8,9 @@ interface AudioPlayerProps {
     filename?: string
     autoplay?: boolean
     onPlayStarted?: () => void
+    onTimeUpdate?: (time: number) => void
+    onPlayingChange?: (isPlaying: boolean) => void
+    seekToTime?: number | null
 }
 
 function formatTime(seconds: number): string {
@@ -16,7 +19,15 @@ function formatTime(seconds: number): string {
     return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-export function AudioPlayer({ audioUrl, filename, autoplay, onPlayStarted }: AudioPlayerProps) {
+export function AudioPlayer({
+    audioUrl,
+    filename,
+    autoplay,
+    onPlayStarted,
+    onTimeUpdate,
+    onPlayingChange,
+    seekToTime
+}: AudioPlayerProps) {
     const containerRef = useRef<HTMLDivElement>(null)
     const wavesurferRef = useRef<WaveSurfer | null>(null)
     const [isPlaying, setIsPlaying] = useState(false)
@@ -123,6 +134,23 @@ export function AudioPlayer({ audioUrl, filename, autoplay, onPlayStarted }: Aud
             onPlayStarted?.()
         }
     }, [autoplay, isReady, isPlaying, onPlayStarted])
+
+    // Notify parent of time updates
+    useEffect(() => {
+        onTimeUpdate?.(currentTime)
+    }, [currentTime, onTimeUpdate])
+
+    // Notify parent of playing state changes
+    useEffect(() => {
+        onPlayingChange?.(isPlaying)
+    }, [isPlaying, onPlayingChange])
+
+    // Handle external seek requests
+    useEffect(() => {
+        if (seekToTime !== null && seekToTime !== undefined && wavesurferRef.current && isReady) {
+            wavesurferRef.current.seekTo(seekToTime / duration)
+        }
+    }, [seekToTime, duration, isReady])
 
     const togglePlay = () => {
         wavesurferRef.current?.playPause()

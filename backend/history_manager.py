@@ -77,6 +77,14 @@ class HistoryManager:
                         logging.info(f"Deleted file: {filepath}")
                     except Exception as e:
                         logging.error(f"Failed to delete file {filepath}: {e}")
+                # Also delete alignment cache file if it exists
+                alignment_path = os.path.splitext(filepath)[0] + ".alignment.json"
+                if os.path.exists(alignment_path):
+                    try:
+                        os.remove(alignment_path)
+                        logging.info(f"Deleted alignment: {alignment_path}")
+                    except Exception as e:
+                        logging.error(f"Failed to delete alignment {alignment_path}: {e}")
                 break
         history = [h for h in history if h["id"] != entry_id]
         self._save_history(history)
@@ -151,6 +159,16 @@ class HistoryManager:
                 except Exception as e:
                     logging.error(f"Failed to rename file: {e}")
                     return None
+                
+                # Also rename alignment cache file if it exists
+                old_alignment = os.path.splitext(old_path)[0] + ".alignment.json"
+                new_alignment = os.path.splitext(new_path)[0] + ".alignment.json"
+                if os.path.exists(old_alignment):
+                    try:
+                        os.rename(old_alignment, new_alignment)
+                        logging.info(f"Renamed alignment: {old_alignment} -> {new_alignment}")
+                    except Exception as e:
+                        logging.error(f"Failed to rename alignment: {e}")
                 
                 # Update entry
                 entry["filename"] = new_relative_path

@@ -16,6 +16,7 @@ from model_manager import model_manager
 from pdf_processor import extract_text_from_pdf
 from history_manager import history_manager
 import llm_service
+import alignment_service
 
 app = FastAPI(title="Sonotext Local API")
 
@@ -158,6 +159,74 @@ def auto_rename_history_entry(entry_id: str):
         raise HTTPException(status_code=500, detail="Rename operation failed")
     
     return result
+
+@app.get("/api/alignment/{entry_id}")
+async def get_alignment(entry_id: str):
+    """
+    Get word-level alignment data for a history entry.
+    Generates alignment on first request (on-demand), caches to JSON file.
+    """
+    # Find the entry
+    history = history_manager.get_history()
+    entry = next((e for e in history if e["id"] == entry_id), None)
+    
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    
+    # Get paths
+    audio_path = history_manager.get_output_path(entry["filename"])
+    alignment_path = alignment_service.get_alignment_path(audio_path)
+    
+    # Check if alignment already exists (cached)
+    existing = alignment_service.load_alignment(alignment_path)
+    if existing:
+        return {
+            "words": [
+                {
+                    "word": w.word,
+                    "start": w.start,
+                    "end": w.end,
+                    "charStart": w.char_start,
+                    "charEnd": w.char_end
+                }
+                for w in existing
+            ],
+            "cached": True
+        }
+    
+    # Generate alignment on-demand
+    try:
+        # Get language code from voice
+        language = alignment_service.get_language_code(entry.get("voice", "af_heart"))
+        
+        # Run alignment in thread pool to avoid blocking
+        alignment = await asyncio.to_thread(
+            alignment_service.align_audio_to_text,
+            audio_path,
+            entry["text"],
+            language
+        )
+        
+        # Cache the alignment
+        alignment_service.save_alignment(alignment, alignment_path)
+        
+        return {
+            "words": [
+                {
+                    "word": w.word,
+                    "start": w.start,
+                    "end": w.end,
+                    "charStart": w.char_start,
+                    "charEnd": w.char_end
+                }
+                for w in alignment
+            ],
+            "cached": False
+        }
+        
+    except Exception as e:
+        logging.error(f"Alignment failed for {entry_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Alignment failed: {str(e)}")
 
 @app.post("/api/generate")
 async def generate_audio(req: GenerateRequest):

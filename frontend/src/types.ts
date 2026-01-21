@@ -8,3 +8,16 @@ export interface HistoryItem {
     timestamp: number
     url: string
 }
+
+export interface WordTiming {
+    word: string
+    start: number
+    end: number
+    charStart: number
+    charEnd: number
+}
+
+export interface AlignmentData {
+    words: WordTiming[]
+    cached: boolean
+}
