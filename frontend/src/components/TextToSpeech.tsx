@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { Loader2, UploadCloud, FileText, ArrowLeft, Clock, Sparkles, ChevronDown, ScrollText } from "lucide-react"
+import { Loader2, UploadCloud, FileText, ArrowLeft, Clock, Sparkles, ChevronDown, ArrowDownUp, Copy, Check } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -68,6 +68,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
     const [seekToTime, setSeekToTime] = useState<number | null>(null)
     const [isLoadingAlignment, setIsLoadingAlignment] = useState(false)
     const [autoScroll, setAutoScroll] = useState(true)
+    const [copied, setCopied] = useState(false)
     const queryClient = useQueryClient()
 
     const handleGenerate = useCallback(async () => {
@@ -346,15 +347,30 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                                         <span>•</span>
                                         <span>{new Date(selectedItem.timestamp * 1000).toLocaleString()}</span>
                                     </div>
-                                    <Button
-                                        variant={autoScroll ? "secondary" : "ghost"}
-                                        size="sm"
-                                        onClick={() => setAutoScroll(!autoScroll)}
-                                        className="gap-2 text-xs"
-                                    >
-                                        <ScrollText className="h-3 w-3" />
-                                        Auto-scroll {autoScroll ? "on" : "off"}
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={async () => {
+                                                await navigator.clipboard.writeText(selectedItem.text)
+                                                setCopied(true)
+                                                setTimeout(() => setCopied(false), 1500)
+                                            }}
+                                            className="gap-2 text-xs"
+                                        >
+                                            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                            {copied ? "Copied!" : "Copy"}
+                                        </Button>
+                                        <Button
+                                            variant={autoScroll ? "secondary" : "ghost"}
+                                            size="sm"
+                                            onClick={() => setAutoScroll(!autoScroll)}
+                                            className="gap-2 text-xs"
+                                        >
+                                            <ArrowDownUp className="h-3 w-3" />
+                                            Auto-scroll {autoScroll ? "On" : "Off"}
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 <SyncedTextView
