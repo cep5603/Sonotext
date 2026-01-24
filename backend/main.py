@@ -1,3 +1,6 @@
+import os
+os.environ["HF_HOME"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hub")
+
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +16,7 @@ import logging
 import uuid
 import asyncio
 from model_manager import model_manager
+from qwen_tts_manager import qwen3_manager
 from pdf_processor import extract_text_from_pdf
 from history_manager import history_manager
 import llm_service
@@ -37,6 +41,8 @@ class GenerateRequest(BaseModel):
     voice: str = "af_heart"
     speed: float = 1.0
     lang: str | None = None  # None means auto-detect from voice
+    engine: str = "kokoro"  # "kokoro" or "qwen3"
+    instruct: str | None = None  # Qwen3-TTS emotion/style instruction
 
 class CleanupRequest(BaseModel):
     text: str
@@ -62,11 +68,62 @@ def split_into_chunks(text: str, max_chars: int = 500) -> list[str]:
     return chunks if chunks else [text]
 
 @app.get("/api/voices")
-def get_voices():
-    """Return available voice IDs."""
+def get_voices(engine: str = "kokoro"):
+    """Return available voice IDs for the specified engine."""
+    if engine == "qwen3":
+        return {"voices": qwen3_manager.get_voices()}
     if not model_manager.voices:
-        return []
-    return model_manager.voices
+        return {"voices": []}
+    return {"voices": model_manager.voices}
+
+
+@app.get("/api/engines")
+def get_engines():
+    """Return available TTS engines and their status."""
+    return {
+        "engines": [
+            {
+                "id": "kokoro",
+                "name": "Kokoro",
+                "description": "Fast, lightweight TTS (82M params)",
+                "loaded": True,  # Kokoro is always loaded
+            },
+            {
+                "id": "qwen3",
+                "name": "Qwen3-TTS",
+                "description": "Expressive, multilingual TTS (0.6B/1.7B params)",
+                "loaded": qwen3_manager.is_loaded,
+            },
+        ]
+    }
+
+
+@app.get("/api/qwen3/info")
+def get_qwen3_info():
+    """Get Qwen3-TTS model info."""
+    return qwen3_manager.get_model_info()
+
+
+class LoadQwen3Request(BaseModel):
+    model_size: str = "1.7B"  # "0.6B" or "1.7B"
+
+
+@app.post("/api/qwen3/load")
+def load_qwen3_model(req: LoadQwen3Request):
+    """Load a Qwen3-TTS model."""
+    try:
+        qwen3_manager.load_model(req.model_size)
+        return qwen3_manager.get_model_info()
+    except Exception as e:
+        logging.error(f"Failed to load Qwen3-TTS: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/qwen3/unload")
+def unload_qwen3_model():
+    """Unload the Qwen3-TTS model to free VRAM."""
+    qwen3_manager.unload_model()
+    return {"status": "success"}
 
 @app.get("/api/llm-status")
 def get_llm_status():
@@ -246,7 +303,23 @@ async def generate_audio(req: GenerateRequest):
                     "data": json.dumps({"progress": progress, "chunk": i + 1, "total": total_chunks})
                 }
                 
-                samples, sr = model_manager.generate_audio(chunk, req.voice, req.speed, req.lang)
+                # Use the appropriate TTS engine (run in thread to avoid blocking)
+                if req.engine == "qwen3":
+                    samples, sr = await asyncio.to_thread(
+                        qwen3_manager.generate_audio,
+                        chunk,
+                        req.voice,
+                        req.lang or "auto",
+                        req.instruct,
+                    )
+                else:
+                    samples, sr = await asyncio.to_thread(
+                        model_manager.generate_audio,
+                        chunk,
+                        req.voice,
+                        req.speed,
+                        req.lang,
+                    )
                 all_samples.append(samples)
                 sample_rate = sr
                 
@@ -267,7 +340,13 @@ async def generate_audio(req: GenerateRequest):
             filepath = history_manager.get_output_path_for_new_file(filename)
             sf.write(filepath, final_samples, sample_rate, format='WAV')
             
-            entry = history_manager.add_entry(req.text, req.voice, req.speed, filename, duration)
+            # Build model identifier for history
+            if req.engine == "qwen3":
+                model_name = f"qwen3-{qwen3_manager.model_size or 'unknown'}"
+            else:
+                model_name = "kokoro"
+            
+            entry = history_manager.add_entry(req.text, req.voice, req.speed, filename, duration, model_name)
             
             yield {
                 "event": "complete",
@@ -369,4 +448,6 @@ async def show_in_explorer(req: ShowInExplorerRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    # Note: reload=False to prevent restarts during Qwen3-TTS model loading
+    # Restart manually after code changes
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)

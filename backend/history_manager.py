@@ -44,7 +44,7 @@ class HistoryManager:
         """Get absolute path from a relative path (date_folder/filename or just filename for legacy)."""
         return os.path.join(OUTPUTS_DIR, relative_path)
 
-    def add_entry(self, text: str, voice: str, speed: float, filename: str, duration: float) -> Dict:
+    def add_entry(self, text: str, voice: str, speed: float, filename: str, duration: float, model: str = "kokoro") -> Dict:
         history = self._load_history()
         date_folder = self._get_date_folder()
         relative_path = f"{date_folder}/{filename}"
@@ -57,7 +57,8 @@ class HistoryManager:
             "filename": relative_path,
             "duration": duration,
             "timestamp": time.time(),
-            "url": f"/outputs/{relative_path}"
+            "url": f"/outputs/{relative_path}",
+            "model": model
         }
         history.insert(0, entry)
         self._save_history(history)

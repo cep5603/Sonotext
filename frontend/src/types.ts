@@ -7,6 +7,7 @@ export interface HistoryItem {
     duration?: number
     timestamp: number
     url: string
+    model?: string  // TTS engine used: "kokoro", "qwen3-0.6B", "qwen3-1.7B"
 }
 
 export interface WordTiming {

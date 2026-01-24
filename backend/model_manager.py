@@ -4,9 +4,6 @@ import numpy as np
 import torch
 from kokoro import KPipeline
 
-# Set HuggingFace cache to project directory for portability
-os.environ["HF_HOME"] = os.path.join(os.path.dirname(__file__), "hub")
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("KokoroManager")

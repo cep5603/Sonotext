@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { Loader2, Power, Circle, RefreshCw } from "lucide-react"
+import { Loader2, Power, Circle, RefreshCw, Zap, Sparkles } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select"
 import { VoiceSelector } from "./VoiceSelector"
 import { LLMModelSelector } from "./LLMModelSelector"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
 interface SettingsSidebarProps {
@@ -22,6 +23,10 @@ interface SettingsSidebarProps {
     onLangChange: (lang: string | null) => void
     speed: number[]
     onSpeedChange: (speed: number[]) => void
+    engine: "kokoro" | "qwen3"
+    onEngineChange: (engine: "kokoro" | "qwen3") => void
+    instruct: string
+    onInstructChange: (instruct: string) => void
 }
 
 const LANGUAGE_OPTIONS = [
@@ -35,6 +40,122 @@ const LANGUAGE_OPTIONS = [
     { value: "pt-br", label: "Portuguese (BR)" },
 ]
 
+// Qwen3-TTS Model Status Component
+function Qwen3ModelStatus() {
+    const queryClient = useQueryClient()
+
+    const { data: modelInfo, isLoading } = useQuery({
+        queryKey: ["qwen3-info"],
+        queryFn: async () => {
+            const res = await axios.get("http://localhost:8000/api/qwen3/info")
+            return res.data as {
+                loaded: boolean
+                model_id: string | null
+                model_size: string | null
+                flash_attention: boolean | null
+            }
+        },
+        refetchInterval: 3000,
+    })
+
+    const loadMutation = useMutation({
+        mutationFn: async (modelSize: string) => {
+            await axios.post("http://localhost:8000/api/qwen3/load", { model_size: modelSize })
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["qwen3-info"] })
+        },
+    })
+
+    const unloadMutation = useMutation({
+        mutationFn: async () => {
+            await axios.post("http://localhost:8000/api/qwen3/unload")
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["qwen3-info"] })
+        },
+    })
+
+    const isModelLoaded = modelInfo?.loaded ?? false
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center p-2">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+        )
+    }
+
+    return (
+        <div className="p-3 rounded-lg border border-border bg-muted/30 space-y-2">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                    <Circle className={cn(
+                        "h-2.5 w-2.5 fill-current",
+                        isModelLoaded ? "text-green-500" : "text-muted-foreground"
+                    )} />
+                    <span className={isModelLoaded ? "text-foreground" : "text-muted-foreground"}>
+                        {isModelLoaded
+                            ? `${modelInfo?.model_size} Model Loaded`
+                            : "Model Not Loaded"}
+                    </span>
+                </div>
+                {isModelLoaded && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => unloadMutation.mutate()}
+                        disabled={unloadMutation.isPending}
+                    >
+                        {unloadMutation.isPending ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                            <>
+                                <Power className="h-3 w-3 mr-1" />
+                                Unload
+                            </>
+                        )}
+                    </Button>
+                )}
+            </div>
+            {!isModelLoaded && (
+                <div className="flex gap-2">
+                    <Button
+                        size="sm"
+                        className="flex-1 h-7 text-xs"
+                        onClick={() => loadMutation.mutate("1.7B")}
+                        disabled={loadMutation.isPending}
+                    >
+                        {loadMutation.isPending ? (
+                            <>
+                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                Loading...
+                            </>
+                        ) : (
+                            "Load 1.7B Model"
+                        )}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => loadMutation.mutate("0.6B")}
+                        disabled={loadMutation.isPending}
+                    >
+                        0.6B
+                    </Button>
+                </div>
+            )}
+            {!modelInfo?.flash_attention && isModelLoaded && (
+                <p className="text-xs text-amber-500">
+                    ⚠ FlashAttention not available
+                </p>
+            )}
+        </div>
+    )
+}
+
 export function SettingsSidebar({
     voice,
     onVoiceChange,
@@ -42,6 +163,10 @@ export function SettingsSidebar({
     onLangChange,
     speed,
     onSpeedChange,
+    engine,
+    onEngineChange,
+    instruct,
+    onInstructChange,
 }: SettingsSidebarProps) {
     const queryClient = useQueryClient()
 
@@ -89,10 +214,86 @@ export function SettingsSidebar({
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
                 {/* Voice Synthesis Settings */}
                 <div className="space-y-4">
+                    {/* TTS Engine Selector */}
                     <div className="space-y-2">
-                        <Label>Voice</Label>
-                        <VoiceSelector value={voice} onValueChange={onVoiceChange} />
+                        <Label>TTS Engine</Label>
+                        <Select
+                            value={engine}
+                            onValueChange={(v) => onEngineChange(v as "kokoro" | "qwen3")}
+                        >
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="kokoro">
+                                    <div className="flex items-center gap-2">
+                                        <Zap className="h-3.5 w-3.5 text-yellow-500" />
+                                        <span>Kokoro</span>
+                                        <span className="text-xs text-muted-foreground">(Fast)</span>
+                                    </div>
+                                </SelectItem>
+                                <SelectItem value="qwen3">
+                                    <div className="flex items-center gap-2">
+                                        <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+                                        <span>Qwen3-TTS</span>
+                                        <span className="text-xs text-muted-foreground">(Expressive)</span>
+                                    </div>
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
+
+                    {/* Voice selector - only show for Kokoro engine */}
+                    {engine === "kokoro" && (
+                        <div className="space-y-2">
+                            <Label>Voice</Label>
+                            <VoiceSelector value={voice} onValueChange={onVoiceChange} />
+                        </div>
+                    )}
+
+                    {/* Qwen3-TTS specific settings */}
+                    {engine === "qwen3" && (
+                        <>
+                            {/* Model Status & Load Button */}
+                            <Qwen3ModelStatus />
+
+                            <div className="space-y-2">
+                                <Label>Speaker</Label>
+                                <Select
+                                    value={voice}
+                                    onValueChange={onVoiceChange}
+                                >
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Select speaker" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="aiden">Aiden (English)</SelectItem>
+                                        <SelectItem value="dylan">Dylan (English)</SelectItem>
+                                        <SelectItem value="eric">Eric (English)</SelectItem>
+                                        <SelectItem value="ryan">Ryan (English)</SelectItem>
+                                        <SelectItem value="serena">Serena (English)</SelectItem>
+                                        <SelectItem value="vivian">Vivian (Chinese)</SelectItem>
+                                        <SelectItem value="uncle_fu">Uncle Fu (Chinese)</SelectItem>
+                                        <SelectItem value="ono_anna">Ono Anna (Japanese)</SelectItem>
+                                        <SelectItem value="sohee">Sohee (Korean)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>
+                                    <span>Style Instruction</span>
+                                    <span className="text-xs text-muted-foreground ml-2">(optional)</span>
+                                </Label>
+                                <Textarea
+                                    placeholder="e.g., Speak happily and excitedly"
+                                    value={instruct}
+                                    onChange={(e) => onInstructChange(e.target.value)}
+                                    className="h-20 resize-none text-sm"
+                                />
+                            </div>
+                        </>
+                    )}
 
                     <div className="space-y-2">
                         <Label>Language</Label>
