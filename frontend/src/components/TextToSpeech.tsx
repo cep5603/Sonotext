@@ -73,6 +73,17 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
     const [copied, setCopied] = useState(false)
     const queryClient = useQueryClient()
 
+    // Switch to appropriate default voice when engine changes
+    useEffect(() => {
+        if (engine === "qwen3") {
+            setVoice("aiden")
+        } else {
+            setVoice("af_heart")
+        }
+        // Reset language to auto since codes differ between engines
+        setLang(null)
+    }, [engine])
+
     const handleGenerate = useCallback(async () => {
         setIsGenerating(true)
         setProgress(0)

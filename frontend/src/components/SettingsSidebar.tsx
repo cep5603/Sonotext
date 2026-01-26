@@ -29,7 +29,7 @@ interface SettingsSidebarProps {
     onInstructChange: (instruct: string) => void
 }
 
-const LANGUAGE_OPTIONS = [
+const KOKORO_LANGUAGE_OPTIONS = [
     { value: "auto", label: "Auto (from voice)" },
     { value: "en-us", label: "English (US)" },
     { value: "en-gb", label: "English (UK)" },
@@ -38,6 +38,20 @@ const LANGUAGE_OPTIONS = [
     { value: "hi", label: "Hindi" },
     { value: "it", label: "Italian" },
     { value: "pt-br", label: "Portuguese (BR)" },
+]
+
+const QWEN3_LANGUAGE_OPTIONS = [
+    { value: "auto", label: "Auto (detect)" },
+    { value: "english", label: "English" },
+    { value: "chinese", label: "Chinese" },
+    { value: "japanese", label: "Japanese" },
+    { value: "korean", label: "Korean" },
+    { value: "french", label: "French" },
+    { value: "german", label: "German" },
+    { value: "italian", label: "Italian" },
+    { value: "spanish", label: "Spanish" },
+    { value: "portuguese", label: "Portuguese" },
+    { value: "russian", label: "Russian" },
 ]
 
 // Qwen3-TTS Model Status Component
@@ -305,7 +319,7 @@ export function SettingsSidebar({
                                 <SelectValue placeholder="Select language" />
                             </SelectTrigger>
                             <SelectContent>
-                                {LANGUAGE_OPTIONS.map((opt) => (
+                                {(engine === "qwen3" ? QWEN3_LANGUAGE_OPTIONS : KOKORO_LANGUAGE_OPTIONS).map((opt) => (
                                     <SelectItem key={opt.value} value={opt.value}>
                                         {opt.label}
                                     </SelectItem>
@@ -314,19 +328,21 @@ export function SettingsSidebar({
                         </Select>
                     </div>
 
-                    <div className="space-y-2">
-                        <div className="flex justify-between">
-                            <Label>Speed</Label>
-                            <span className="text-sm text-muted-foreground">{speed[0]}x</span>
+                    {engine === "kokoro" && (
+                        <div className="space-y-2">
+                            <div className="flex justify-between">
+                                <Label>Speed</Label>
+                                <span className="text-sm text-muted-foreground">{speed[0]}x</span>
+                            </div>
+                            <Slider
+                                value={speed}
+                                onValueChange={onSpeedChange}
+                                min={0.5}
+                                max={2.0}
+                                step={0.1}
+                            />
                         </div>
-                        <Slider
-                            value={speed}
-                            onValueChange={onSpeedChange}
-                            min={0.5}
-                            max={2.0}
-                            step={0.1}
-                        />
-                    </div>
+                    )}
                 </div>
 
                 {/* Separator */}

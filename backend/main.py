@@ -67,6 +67,60 @@ def split_into_chunks(text: str, max_chars: int = 500) -> list[str]:
     
     return chunks if chunks else [text]
 
+def crossfade_chunks(chunks: list[np.ndarray], sample_rate: int, crossfade_ms: int = 200) -> np.ndarray:
+    """
+    Concatenate audio chunks with crossfade blending to smooth transitions.
+    
+    Args:
+        chunks: List of audio arrays (numpy float32)
+        sample_rate: Audio sample rate in Hz
+        crossfade_ms: Crossfade duration in milliseconds
+    
+    Returns:
+        Single concatenated audio array with crossfaded transitions
+    """
+    if not chunks:
+        return np.array([], dtype=np.float32)
+    if len(chunks) == 1:
+        return chunks[0]
+    
+    crossfade_samples = int(sample_rate * crossfade_ms / 1000)
+    
+    # Normalize each chunk to prevent volume jumps
+    normalized = []
+    for chunk in chunks:
+        if len(chunk) > 0:
+            peak = np.max(np.abs(chunk))
+            if peak > 0:
+                chunk = chunk / peak * 0.95  # Normalize to 95% to prevent clipping
+        normalized.append(chunk)
+    
+    # Build output with crossfades
+    result = normalized[0].copy()
+    
+    for i in range(1, len(normalized)):
+        current = normalized[i]
+        
+        if len(result) < crossfade_samples or len(current) < crossfade_samples:
+            # Chunks too short for crossfade, just concatenate
+            result = np.concatenate([result, current])
+        else:
+            # Create crossfade: fade out end of previous, fade in start of current
+            fade_out = np.linspace(1.0, 0.0, crossfade_samples, dtype=np.float32)
+            fade_in = np.linspace(0.0, 1.0, crossfade_samples, dtype=np.float32)
+            
+            # Blend the overlapping region
+            overlap = result[-crossfade_samples:] * fade_out + current[:crossfade_samples] * fade_in
+            
+            # Concatenate: previous (minus overlap) + blended overlap + current (minus overlap)
+            result = np.concatenate([
+                result[:-crossfade_samples],
+                overlap,
+                current[crossfade_samples:]
+            ])
+    
+    return result
+
 @app.get("/api/voices")
 def get_voices(engine: str = "kokoro"):
     """Return available voice IDs for the specified engine."""
@@ -325,7 +379,11 @@ async def generate_audio(req: GenerateRequest):
                 
                 await asyncio.sleep(0.01)
             
-            final_samples = np.concatenate(all_samples)
+            # Crossfade and normalize chunks for smoother transitions
+            if len(all_samples) > 1:
+                final_samples = crossfade_chunks(all_samples, sample_rate, crossfade_ms=200)
+            else:
+                final_samples = all_samples[0] if all_samples else np.array([], dtype=np.float32)
             duration = len(final_samples) / sample_rate
             
             # Try to generate a descriptive filename using LLM

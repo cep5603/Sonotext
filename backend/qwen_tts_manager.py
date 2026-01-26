@@ -193,6 +193,7 @@ class Qwen3TTSManager:
         speaker: str = "ryan",
         language: str = "Auto",
         instruct: str | None = None,
+        max_new_tokens: int = 8192,  # ~11 minutes at 12Hz tokenization
     ) -> tuple[np.ndarray, int]:
         """
         Generate audio from text using Qwen3-TTS.
@@ -202,6 +203,7 @@ class Qwen3TTSManager:
             speaker: Speaker name (from get_voices())
             language: Target language or "Auto" for detection
             instruct: Optional emotional/style instruction (e.g., "Speak happily")
+            max_new_tokens: Maximum audio tokens to generate (default 8192 = ~11 min)
 
         Returns:
             Tuple of (audio_data as numpy array, sample_rate)
@@ -227,6 +229,7 @@ class Qwen3TTSManager:
             language=language,
             speaker=speaker,
             instruct=instruct or "",
+            max_new_tokens=max_new_tokens,
         )
 
         # Return first wav (single inference)
