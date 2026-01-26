@@ -22,3 +22,13 @@ export interface AlignmentData {
     words: WordTiming[]
     cached: boolean
 }
+
+export interface VoiceProfile {
+    id: string
+    name: string
+    description: string
+    reference_text: string
+    language: string
+    source: "designed" | "uploaded"
+    created_at: number
+}

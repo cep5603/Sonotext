@@ -48,6 +48,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
     const [speed, setSpeed] = useState([1.0])
     const [engine, setEngine] = useState<"kokoro" | "qwen3">("kokoro")
     const [instruct, setInstruct] = useState("")  // Qwen3-TTS emotion/style instruction
+    const [voiceProfileId, setVoiceProfileId] = useState<string | null>(null)  // Custom voice for cloning
     const [audioUrl, setAudioUrl] = useState<string | null>(null)
     const [audioFilename, setAudioFilename] = useState<string | undefined>(undefined)
     const [isDragging, setIsDragging] = useState(false)
@@ -104,6 +105,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                     lang,
                     engine,
                     instruct: engine === "qwen3" && instruct ? instruct : null,
+                    voice_profile_id: engine === "qwen3" && voiceProfileId ? voiceProfileId : null,
                 }),
             })
 
@@ -152,7 +154,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
         } finally {
             setIsGenerating(false)
         }
-    }, [text, voice, lang, speed, engine, instruct, queryClient])
+    }, [text, voice, lang, speed, engine, instruct, voiceProfileId, queryClient])
 
     const handleCleanText = useCallback(async () => {
         setIsCleaning(true)
@@ -336,6 +338,8 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                 onEngineChange={setEngine}
                 instruct={instruct}
                 onInstructChange={setInstruct}
+                voiceProfileId={voiceProfileId}
+                onVoiceProfileChange={setVoiceProfileId}
             />
             <div className="flex-1 min-w-0 min-h-0 h-full px-8 py-4">
                 <Card className="border-none shadow-2xl bg-card/80 backdrop-blur-xl h-full flex flex-col max-w-4xl mx-auto">
@@ -415,8 +419,8 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                                 />
 
                                 <AudioPlayer
-                                    audioUrl={audioUrl}
-                                    filename={audioFilename}
+                                    audioUrl={selectedItem.url.startsWith('http') ? selectedItem.url : `http://localhost:8000${selectedItem.url}`}
+                                    filename={selectedItem.filename}
                                     autoplay={shouldAutoplay}
                                     onPlayStarted={() => setShouldAutoplay(false)}
                                     onTimeUpdate={setAudioCurrentTime}

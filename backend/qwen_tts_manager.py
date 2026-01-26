@@ -2,23 +2,40 @@
 Qwen3-TTS Manager
 
 Manages Qwen3-TTS models for text-to-speech generation.
-Supports both 0.6B and 1.7B CustomVoice models.
+Supports CustomVoice, VoiceDesign, and Base models.
 """
 
 import os
 import logging
 import numpy as np
 import torch
+from dataclasses import dataclass
+from typing import Optional
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Qwen3TTSManager")
 
-# Available models
+# Available models by type and size
 QWEN3_MODELS = {
-    "0.6B": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
-    "1.7B": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    # CustomVoice: Preset speakers with optional style instructions
+    "custom-0.6B": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+    "custom-1.7B": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    # VoiceDesign: Create custom voice from natural language description
+    "design-1.7B": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    # Base: Voice cloning from reference audio
+    "base-0.6B": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+    "base-1.7B": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
 }
+
+# Model type extraction helper
+def get_model_type(model_key: str) -> str:
+    """Get model type from model key (e.g., 'custom-1.7B' -> 'custom')."""
+    return model_key.split("-")[0]
+
+def get_model_size(model_key: str) -> str:
+    """Get model size from model key (e.g., 'custom-1.7B' -> '1.7B')."""
+    return model_key.split("-")[1]
 
 # Check CUDA availability
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -28,11 +45,18 @@ if DEVICE == "cuda":
 
 
 class Qwen3TTSManager:
-    """Manages Qwen3-TTS model loading and audio generation."""
+    """Manages Qwen3-TTS model loading and audio generation.
+    
+    Supports three model types:
+    - CustomVoice: Preset speakers with optional style instructions
+    - VoiceDesign: Create custom voice from natural language description
+    - Base: Voice cloning from reference audio
+    """
 
     def __init__(self):
         self.model = None
         self.model_id: str | None = None
+        self.model_key: str | None = None  # e.g., "custom-1.7B"
         self.speakers: list[str] = []
         self.languages: list[str] = []
         self._flash_attn_available: bool | None = None
@@ -44,14 +68,18 @@ class Qwen3TTSManager:
         return self.model is not None
 
     @property
+    def model_type(self) -> str | None:
+        """Get the type of currently loaded model ('custom', 'design', or 'base')."""
+        if self.model_key is None:
+            return None
+        return get_model_type(self.model_key)
+
+    @property
     def model_size(self) -> str | None:
         """Get the size of the currently loaded model (e.g., '0.6B' or '1.7B')."""
-        if self.model_id is None:
+        if self.model_key is None:
             return None
-        for size, model_id in QWEN3_MODELS.items():
-            if model_id == self.model_id:
-                return size
-        return None
+        return get_model_size(self.model_key)
 
     def _check_flash_attention(self) -> bool:
         """Check if FlashAttention 2 is available."""
@@ -71,17 +99,21 @@ class Qwen3TTSManager:
             )
         return self._flash_attn_available
 
-    def load_model(self, model_size: str = "1.7B") -> None:
+    def load_model(self, model_key: str = "custom-1.7B") -> None:
         """
         Load a Qwen3-TTS model.
 
         Args:
-            model_size: Either "0.6B" or "1.7B"
+            model_key: Model key like "custom-1.7B", "design-1.7B", or "base-1.7B"
         """
-        if model_size not in QWEN3_MODELS:
-            raise ValueError(f"Invalid model size: {model_size}. Choose from: {list(QWEN3_MODELS.keys())}")
+        # Handle legacy format (just size like "1.7B" -> "custom-1.7B")
+        if model_key in ("0.6B", "1.7B"):
+            model_key = f"custom-{model_key}"
+            
+        if model_key not in QWEN3_MODELS:
+            raise ValueError(f"Invalid model key: {model_key}. Choose from: {list(QWEN3_MODELS.keys())}")
 
-        model_id = QWEN3_MODELS[model_size]
+        model_id = QWEN3_MODELS[model_key]
 
         # Don't reload if same model already loaded
         if self.model is not None and self.model_id == model_id:
@@ -107,14 +139,19 @@ class Qwen3TTSManager:
             attn_implementation=attn_impl,
         )
         self.model_id = model_id
+        self.model_key = model_key
 
-        # Get supported speakers and languages
-        self.speakers = list(self.model.get_supported_speakers())
-        self.languages = list(self.model.get_supported_languages())
+        # Get supported speakers and languages (if available for this model type)
+        speakers = self.model.get_supported_speakers()
+        languages = self.model.get_supported_languages()
+        self.speakers = list(speakers) if speakers else []
+        self.languages = list(languages) if languages else []
 
-        logger.info(f"Loaded {model_id} with {len(self.speakers)} speakers, {len(self.languages)} languages")
-        logger.info(f"Speakers: {self.speakers}")
-        logger.info(f"Languages: {self.languages}")
+        logger.info(f"Loaded {model_id} (type={self.model_type}, size={self.model_size})")
+        if self.speakers:
+            logger.info(f"Speakers: {self.speakers}")
+        if self.languages:
+            logger.info(f"Languages: {self.languages}")
 
     def unload_model(self) -> None:
         """Unload the current model to free VRAM."""
@@ -122,6 +159,7 @@ class Qwen3TTSManager:
             del self.model
             self.model = None
             self.model_id = None
+            self.model_key = None
             self.speakers = []
             self.languages = []
             if DEVICE == "cuda":
@@ -179,9 +217,9 @@ class Qwen3TTSManager:
         return {
             "loaded": self.is_loaded,
             "model_id": self.model_id,
-            "model_size": next(
-                (k for k, v in QWEN3_MODELS.items() if v == self.model_id), None
-            ),
+            "model_key": self.model_key,
+            "model_type": self.model_type,
+            "model_size": self.model_size,
             "speakers": self.speakers,
             "languages": self.languages,
             "flash_attention": self._flash_attn_available,
@@ -193,24 +231,29 @@ class Qwen3TTSManager:
         speaker: str = "ryan",
         language: str = "Auto",
         instruct: str | None = None,
-        max_new_tokens: int = 8192,  # ~11 minutes at 12Hz tokenization
+        max_new_tokens: int = 8192,
     ) -> tuple[np.ndarray, int]:
         """
-        Generate audio from text using Qwen3-TTS.
+        Generate audio from text using Qwen3-TTS CustomVoice model.
 
         Args:
             text: The text to synthesize
             speaker: Speaker name (from get_voices())
             language: Target language or "Auto" for detection
             instruct: Optional emotional/style instruction (e.g., "Speak happily")
-            max_new_tokens: Maximum audio tokens to generate (default 8192 = ~11 min)
+            max_new_tokens: Maximum audio tokens to generate
 
         Returns:
             Tuple of (audio_data as numpy array, sample_rate)
         """
         if not self.is_loaded:
             raise RuntimeError(
-                "Qwen3-TTS model not loaded. Call load_model() first or use /api/qwen3/load endpoint."
+                "Qwen3-TTS model not loaded. Call load_model() first."
+            )
+        
+        if self.model_type != "custom":
+            raise RuntimeError(
+                f"generate_audio requires CustomVoice model, but {self.model_type} is loaded."
             )
 
         # Validate speaker (case-insensitive)
@@ -233,6 +276,126 @@ class Qwen3TTSManager:
         )
 
         # Return first wav (single inference)
+        return wavs[0], sr
+
+    # Voice Design Methods (requires VoiceDesign model)
+
+    def generate_voice_design(
+        self,
+        text: str,
+        voice_description: str,
+        language: str = "Auto",
+        max_new_tokens: int = 2048,
+    ) -> tuple[np.ndarray, int]:
+        """
+        Generate audio with a custom-designed voice using natural language description.
+        
+        Requires VoiceDesign model to be loaded.
+
+        Args:
+            text: The text to synthesize
+            voice_description: Natural language description of desired voice
+                              (e.g., "Male, 35 years old, baritone, calm and professional")
+            language: Target language or "Auto" for detection
+            max_new_tokens: Maximum audio tokens to generate
+
+        Returns:
+            Tuple of (audio_data as numpy array, sample_rate)
+        """
+        if not self.is_loaded:
+            raise RuntimeError("Qwen3-TTS model not loaded. Call load_model('design-1.7B') first.")
+        
+        if self.model_type != "design":
+            raise RuntimeError(
+                f"generate_voice_design requires VoiceDesign model, but {self.model_type} is loaded. "
+                f"Call load_model('design-1.7B') first."
+            )
+
+        wavs, sr = self.model.generate_voice_design(
+            text=text,
+            instruct=voice_description,
+            language=language,
+            max_new_tokens=max_new_tokens,
+        )
+
+        return wavs[0], sr
+
+    # Voice Clone Methods (requires Base model)
+
+    def create_voice_clone_prompt(
+        self,
+        ref_audio: np.ndarray,
+        ref_audio_sr: int,
+        ref_text: str,
+    ):
+        """
+        Create a reusable voice clone prompt from reference audio.
+        
+        Requires Base model to be loaded.
+
+        Args:
+            ref_audio: Reference audio waveform (numpy array)
+            ref_audio_sr: Sample rate of reference audio
+            ref_text: Transcript of the reference audio
+
+        Returns:
+            VoiceClonePromptItem that can be reused for multiple generations
+        """
+        if not self.is_loaded:
+            raise RuntimeError("Qwen3-TTS model not loaded. Call load_model('base-1.7B') first.")
+        
+        if self.model_type != "base":
+            raise RuntimeError(
+                f"create_voice_clone_prompt requires Base model, but {self.model_type} is loaded. "
+                f"Call load_model('base-1.7B') first."
+            )
+
+        prompt_items = self.model.create_voice_clone_prompt(
+            ref_audio=(ref_audio, ref_audio_sr),
+            ref_text=ref_text,
+            x_vector_only_mode=False,  # Use ICL mode for best quality
+        )
+
+        # Return single prompt item (we only passed one reference)
+        return prompt_items[0]
+
+    def generate_voice_clone(
+        self,
+        text: str,
+        voice_clone_prompt,
+        language: str = "Auto",
+        max_new_tokens: int = 2048,
+    ) -> tuple[np.ndarray, int]:
+        """
+        Generate audio using a cloned voice.
+        
+        Requires Base model to be loaded.
+
+        Args:
+            text: The text to synthesize
+            voice_clone_prompt: VoiceClonePromptItem from create_voice_clone_prompt()
+            language: Target language or "Auto" for detection
+            max_new_tokens: Maximum audio tokens to generate
+
+        Returns:
+            Tuple of (audio_data as numpy array, sample_rate)
+        """
+        if not self.is_loaded:
+            raise RuntimeError("Qwen3-TTS model not loaded. Call load_model('base-1.7B') first.")
+        
+        if self.model_type != "base":
+            raise RuntimeError(
+                f"generate_voice_clone requires Base model, but {self.model_type} is loaded. "
+                f"Call load_model('base-1.7B') first."
+            )
+
+        wavs, sr = self.model.generate_voice_clone(
+            text=text,
+            language=language,
+            voice_clone_prompt=[voice_clone_prompt],  # Wrap in list as expected by API
+            max_new_tokens=max_new_tokens,
+        )
+
         return wavs[0], sr
 
 

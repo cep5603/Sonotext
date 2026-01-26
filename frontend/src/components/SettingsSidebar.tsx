@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select"
 import { VoiceSelector } from "./VoiceSelector"
 import { LLMModelSelector } from "./LLMModelSelector"
+import { CustomVoicesSection } from "./CustomVoicesSection"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
@@ -27,6 +28,8 @@ interface SettingsSidebarProps {
     onEngineChange: (engine: "kokoro" | "qwen3") => void
     instruct: string
     onInstructChange: (instruct: string) => void
+    voiceProfileId: string | null
+    onVoiceProfileChange: (profileId: string | null) => void
 }
 
 const KOKORO_LANGUAGE_OPTIONS = [
@@ -181,6 +184,8 @@ export function SettingsSidebar({
     onEngineChange,
     instruct,
     onInstructChange,
+    voiceProfileId,
+    onVoiceProfileChange,
 }: SettingsSidebarProps) {
     const queryClient = useQueryClient()
 
@@ -304,6 +309,14 @@ export function SettingsSidebar({
                                     value={instruct}
                                     onChange={(e) => onInstructChange(e.target.value)}
                                     className="h-20 resize-none text-sm"
+                                />
+                            </div>
+
+                            {/* Custom Voice Profiles for consistent cloning */}
+                            <div className="border-t border-border pt-4">
+                                <CustomVoicesSection
+                                    selectedProfileId={voiceProfileId}
+                                    onProfileSelect={onVoiceProfileChange}
                                 />
                             </div>
                         </>

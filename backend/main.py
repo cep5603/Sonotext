@@ -1,7 +1,7 @@
 import os
 os.environ["HF_HOME"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hub")
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -17,6 +17,7 @@ import uuid
 import asyncio
 from model_manager import model_manager
 from qwen_tts_manager import qwen3_manager
+from voice_profiles import voice_profile_manager, DEFAULT_REFERENCE_TEXT
 from pdf_processor import extract_text_from_pdf
 from history_manager import history_manager
 import llm_service
@@ -43,6 +44,7 @@ class GenerateRequest(BaseModel):
     lang: str | None = None  # None means auto-detect from voice
     engine: str = "kokoro"  # "kokoro" or "qwen3"
     instruct: str | None = None  # Qwen3-TTS emotion/style instruction
+    voice_profile_id: str | None = None  # Custom voice profile for cloning
 
 class CleanupRequest(BaseModel):
     text: str
@@ -178,6 +180,230 @@ def unload_qwen3_model():
     """Unload the Qwen3-TTS model to free VRAM."""
     qwen3_manager.unload_model()
     return {"status": "success"}
+
+
+# Voice Profile API Endpoints
+
+@app.get("/api/voice-profiles")
+def list_voice_profiles():
+    """List all saved voice profiles."""
+    profiles = voice_profile_manager.list_profiles()
+    return {
+        "profiles": [p.to_dict() for p in profiles]
+    }
+
+
+@app.get("/api/voice-profiles/{profile_id}")
+def get_voice_profile(profile_id: str):
+    """Get a specific voice profile."""
+    profile = voice_profile_manager.get_profile(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Voice profile not found")
+    return profile.to_dict()
+
+
+class CreateVoiceDesignRequest(BaseModel):
+    name: str
+    description: str  # Voice design instruction
+    language: str = "Auto"
+
+
+@app.post("/api/voice-profiles/design")
+async def create_voice_profile_from_design(req: CreateVoiceDesignRequest):
+    """
+    Create a new voice profile from natural language description.
+    
+    Requires loading the VoiceDesign model, generating reference audio,
+    then switching to Base model for future cloning.
+    """
+    try:
+        # Load VoiceDesign model
+        qwen3_manager.load_model("design-1.7B")
+        
+        # Generate reference audio
+        reference_audio, sr = qwen3_manager.generate_voice_design(
+            text=DEFAULT_REFERENCE_TEXT,
+            voice_description=req.description,
+            language=req.language,
+        )
+        
+        # Create and save profile
+        profile = voice_profile_manager.create_from_design(
+            name=req.name,
+            description=req.description,
+            reference_audio=reference_audio,
+            sample_rate=sr,
+            reference_text=DEFAULT_REFERENCE_TEXT,
+            language=req.language,
+        )
+        
+        return profile.to_dict()
+        
+    except Exception as e:
+        logging.error(f"Failed to create voice profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/voice-profiles/upload")
+async def create_voice_profile_from_upload(
+    name: str = Form(...),
+    transcript: str = Form(...),
+    language: str = Form("Auto"),
+    audio: UploadFile = File(...),
+):
+    """
+    Create a voice profile from uploaded audio file.
+    
+    The audio should be a short (~10 second) sample with the transcript provided.
+    """
+    try:
+        audio_data = await audio.read()
+        
+        profile = voice_profile_manager.create_from_upload(
+            name=name,
+            audio_data=audio_data,
+            transcript=transcript,
+            language=language,
+        )
+        
+        return profile.to_dict()
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logging.error(f"Failed to create voice profile from upload: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/voice-profiles/{profile_id}")
+def delete_voice_profile(profile_id: str):
+    """Delete a voice profile."""
+    success = voice_profile_manager.delete_profile(profile_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Voice profile not found")
+    return {"status": "success"}
+
+
+@app.post("/api/transcribe")
+async def transcribe_audio(
+    audio: UploadFile = File(...),
+    language: str = "eng",
+):
+    """
+    Transcribe an audio file using faster-whisper.
+    
+    Uses CTranslate2 backend for 4x faster inference and lower VRAM.
+    Used for generating transcripts for voice cloning reference audio.
+    """
+    import tempfile
+    import torch
+    from faster_whisper import WhisperModel
+    
+    try:
+        # Save uploaded file to temp location
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            content = await audio.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+        
+        try:
+            # Load faster-whisper model
+            logging.info("Loading faster-whisper model for transcription...")
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            compute_type = "float16" if device == "cuda" else "int8"
+            
+            model = WhisperModel("small", device=device, compute_type=compute_type)
+            
+            # Map language codes
+            lang_map = {
+                "eng": "en",
+                "cmn": "zh", 
+                "jpn": "ja",
+                "kor": "ko",
+                "fra": "fr",
+                "deu": "de",
+                "spa": "es",
+                "por": "pt",
+                "rus": "ru",
+                "ita": "it",
+            }
+            whisper_lang = lang_map.get(language, "en")
+            
+            # Transcribe
+            segments, info = model.transcribe(tmp_path, language=whisper_lang)
+            transcript = " ".join([segment.text for segment in segments]).strip()
+            
+            # Cleanup model
+            del model
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            logging.info("faster-whisper model unloaded")
+            
+            return {"transcript": transcript}
+            
+        finally:
+            # Clean up temp file
+            import os
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+                
+    except Exception as e:
+        logging.error(f"Transcription failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class PreviewVoiceRequest(BaseModel):
+    text: str = "Hello, this is a preview of my voice."
+
+
+@app.post("/api/voice-profiles/{profile_id}/preview")
+async def preview_voice_profile(profile_id: str, req: PreviewVoiceRequest):
+    """
+    Generate a short preview using a voice profile.
+    
+    Returns the audio as a WAV file.
+    """
+    profile = voice_profile_manager.get_profile(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Voice profile not found")
+    
+    ref_audio = voice_profile_manager.get_reference_audio(profile_id)
+    if ref_audio is None:
+        raise HTTPException(status_code=404, detail="Reference audio not found")
+    
+    try:
+        # Load Base model for cloning
+        qwen3_manager.load_model("base-1.7B")
+        
+        # Create voice clone prompt
+        voice_clone_prompt = qwen3_manager.create_voice_clone_prompt(
+            ref_audio=ref_audio[0],
+            ref_audio_sr=ref_audio[1],
+            ref_text=profile.reference_text,
+        )
+        
+        # Generate preview audio
+        preview_audio, sr = qwen3_manager.generate_voice_clone(
+            text=req.text,
+            voice_clone_prompt=voice_clone_prompt,
+            language=profile.language,
+        )
+        
+        # Return as WAV
+        buffer = io.BytesIO()
+        sf.write(buffer, preview_audio, sr, format='WAV')
+        buffer.seek(0)
+        
+        return StreamingResponse(
+            buffer,
+            media_type="audio/wav",
+            headers={"Content-Disposition": f"attachment; filename=preview-{profile_id[:8]}.wav"}
+        )
+        
+    except Exception as e:
+        logging.error(f"Failed to generate preview: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/llm-status")
 def get_llm_status():
@@ -350,6 +576,37 @@ async def generate_audio(req: GenerateRequest):
             all_samples = []
             sample_rate = None
             
+            # If using a voice profile, set up cloning
+            voice_clone_prompt = None
+            voice_name = req.voice  # Default to speaker name
+            if req.voice_profile_id:
+                yield {
+                    "event": "progress",
+                    "data": json.dumps({"progress": 0, "chunk": 0, "total": total_chunks, "message": "Loading voice profile..."})
+                }
+                
+                profile = voice_profile_manager.get_profile(req.voice_profile_id)
+                if profile is None:
+                    raise ValueError(f"Voice profile not found: {req.voice_profile_id}")
+                
+                # Use profile name as voice identifier for history
+                voice_name = profile.name
+                
+                ref_audio = voice_profile_manager.get_reference_audio(req.voice_profile_id)
+                if ref_audio is None:
+                    raise ValueError(f"Reference audio not found for profile: {req.voice_profile_id}")
+                
+                # Load Base model for cloning
+                await asyncio.to_thread(qwen3_manager.load_model, "base-1.7B")
+                
+                # Create voice clone prompt (reusable for all chunks)
+                voice_clone_prompt = await asyncio.to_thread(
+                    qwen3_manager.create_voice_clone_prompt,
+                    ref_audio[0],
+                    ref_audio[1],
+                    profile.reference_text,
+                )
+            
             for i, chunk in enumerate(chunks):
                 progress = int((i / total_chunks) * 100)
                 yield {
@@ -358,7 +615,15 @@ async def generate_audio(req: GenerateRequest):
                 }
                 
                 # Use the appropriate TTS engine (run in thread to avoid blocking)
-                if req.engine == "qwen3":
+                if voice_clone_prompt is not None:
+                    # Voice cloning mode - uses Base model
+                    samples, sr = await asyncio.to_thread(
+                        qwen3_manager.generate_voice_clone,
+                        chunk,
+                        voice_clone_prompt,
+                        req.lang or "auto",
+                    )
+                elif req.engine == "qwen3":
                     samples, sr = await asyncio.to_thread(
                         qwen3_manager.generate_audio,
                         chunk,
@@ -404,7 +669,7 @@ async def generate_audio(req: GenerateRequest):
             else:
                 model_name = "kokoro"
             
-            entry = history_manager.add_entry(req.text, req.voice, req.speed, filename, duration, model_name)
+            entry = history_manager.add_entry(req.text, voice_name, req.speed, filename, duration, model_name)
             
             yield {
                 "event": "complete",

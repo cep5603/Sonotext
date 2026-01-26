@@ -16,6 +16,9 @@ hub/
 # Generated outputs
 outputs/
 
+# User-made custom voices
+voice_profiles/
+
 # Runtime/session data
 history.json
 

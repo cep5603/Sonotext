@@ -56,6 +56,26 @@ def _ensure_model_loaded():
     logger.info("Alignment model loaded successfully")
 
 
+def unload_model():
+    """Unload the alignment model to free VRAM."""
+    global _alignment_model, _alignment_tokenizer
+    
+    if _alignment_model is None:
+        return
+    
+    import torch
+    
+    del _alignment_model
+    del _alignment_tokenizer
+    _alignment_model = None
+    _alignment_tokenizer = None
+    
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
+    logger.info("Alignment model unloaded")
+
+
 def get_language_code(voice: str) -> str:
     """
     Map Kokoro voice ID to ISO-639-3 language code for alignment.
