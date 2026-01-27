@@ -68,7 +68,6 @@ function Qwen3ModelStatus() {
             return res.data as {
                 loaded: boolean
                 model_id: string | null
-                model_size: string | null
                 flash_attention: boolean | null
             }
         },
@@ -76,8 +75,8 @@ function Qwen3ModelStatus() {
     })
 
     const loadMutation = useMutation({
-        mutationFn: async (modelSize: string) => {
-            await axios.post("http://localhost:8000/api/qwen3/load", { model_size: modelSize })
+        mutationFn: async () => {
+            await axios.post("http://localhost:8000/api/qwen3/load", {})
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["qwen3-info"] })
@@ -113,7 +112,7 @@ function Qwen3ModelStatus() {
                     )} />
                     <span className={isModelLoaded ? "text-foreground" : "text-muted-foreground"}>
                         {isModelLoaded
-                            ? `${modelInfo?.model_size} Model Loaded`
+                            ? `Model Loaded`
                             : "Model Not Loaded"}
                     </span>
                 </div>
@@ -137,32 +136,21 @@ function Qwen3ModelStatus() {
                 )}
             </div>
             {!isModelLoaded && (
-                <div className="flex gap-2">
-                    <Button
-                        size="sm"
-                        className="flex-1 h-7 text-xs"
-                        onClick={() => loadMutation.mutate("1.7B")}
-                        disabled={loadMutation.isPending}
-                    >
-                        {loadMutation.isPending ? (
-                            <>
-                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                Loading...
-                            </>
-                        ) : (
-                            "Load 1.7B Model"
-                        )}
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => loadMutation.mutate("0.6B")}
-                        disabled={loadMutation.isPending}
-                    >
-                        0.6B
-                    </Button>
-                </div>
+                <Button
+                    size="sm"
+                    className="w-full h-7 text-xs"
+                    onClick={() => loadMutation.mutate()}
+                    disabled={loadMutation.isPending}
+                >
+                    {loadMutation.isPending ? (
+                        <>
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                            Loading...
+                        </>
+                    ) : (
+                        "Load Model"
+                    )}
+                </Button>
             )}
             {!modelInfo?.flash_attention && isModelLoaded && (
                 <p className="text-xs text-amber-500">
@@ -248,14 +236,12 @@ export function SettingsSidebar({
                                     <div className="flex items-center gap-2">
                                         <Zap className="h-3.5 w-3.5 text-yellow-500" />
                                         <span>Kokoro</span>
-                                        <span className="text-xs text-muted-foreground">(Fast)</span>
                                     </div>
                                 </SelectItem>
                                 <SelectItem value="qwen3">
                                     <div className="flex items-center gap-2">
                                         <Sparkles className="h-3.5 w-3.5 text-purple-500" />
                                         <span>Qwen3-TTS</span>
-                                        <span className="text-xs text-muted-foreground">(Expressive)</span>
                                     </div>
                                 </SelectItem>
                             </SelectContent>
@@ -406,7 +392,7 @@ export function SettingsSidebar({
                                 ) : (
                                     <>
                                         <Power className="h-3 w-3 mr-1" />
-                                        Eject
+                                        Unload
                                     </>
                                 )}
                             </Button>

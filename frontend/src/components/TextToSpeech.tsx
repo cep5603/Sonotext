@@ -368,9 +368,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                                         {selectedItem.model && (
                                             <>
                                                 <span>•</span>
-                                                <span className="text-xs px-1.5 py-0.5 rounded bg-muted font-mono">
-                                                    {selectedItem.model === "kokoro" ? "Kokoro" : selectedItem.model.replace("qwen3-", "Qwen3 ")}
-                                                </span>
+                                                <span>{selectedItem.model}</span>
                                             </>
                                         )}
                                         <span>•</span>

@@ -19,12 +19,10 @@ logger = logging.getLogger("Qwen3TTSManager")
 # Available models by type and size
 QWEN3_MODELS = {
     # CustomVoice: Preset speakers with optional style instructions
-    "custom-0.6B": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
     "custom-1.7B": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
     # VoiceDesign: Create custom voice from natural language description
     "design-1.7B": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
     # Base: Voice cloning from reference audio
-    "base-0.6B": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
     "base-1.7B": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
 }
 
@@ -32,10 +30,6 @@ QWEN3_MODELS = {
 def get_model_type(model_key: str) -> str:
     """Get model type from model key (e.g., 'custom-1.7B' -> 'custom')."""
     return model_key.split("-")[0]
-
-def get_model_size(model_key: str) -> str:
-    """Get model size from model key (e.g., 'custom-1.7B' -> '1.7B')."""
-    return model_key.split("-")[1]
 
 # Check CUDA availability
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -74,13 +68,6 @@ class Qwen3TTSManager:
             return None
         return get_model_type(self.model_key)
 
-    @property
-    def model_size(self) -> str | None:
-        """Get the size of the currently loaded model (e.g., '0.6B' or '1.7B')."""
-        if self.model_key is None:
-            return None
-        return get_model_size(self.model_key)
-
     def _check_flash_attention(self) -> bool:
         """Check if FlashAttention 2 is available."""
         if self._flash_attn_available is not None:
@@ -99,16 +86,13 @@ class Qwen3TTSManager:
             )
         return self._flash_attn_available
 
-    def load_model(self, model_key: str = "custom-1.7B") -> None:
+    def load_model(self, model_key) -> None:
         """
         Load a Qwen3-TTS model.
 
         Args:
             model_key: Model key like "custom-1.7B", "design-1.7B", or "base-1.7B"
         """
-        # Handle legacy format (just size like "1.7B" -> "custom-1.7B")
-        if model_key in ("0.6B", "1.7B"):
-            model_key = f"custom-{model_key}"
             
         if model_key not in QWEN3_MODELS:
             raise ValueError(f"Invalid model key: {model_key}. Choose from: {list(QWEN3_MODELS.keys())}")
@@ -147,7 +131,7 @@ class Qwen3TTSManager:
         self.speakers = list(speakers) if speakers else []
         self.languages = list(languages) if languages else []
 
-        logger.info(f"Loaded {model_id} (type={self.model_type}, size={self.model_size})")
+        logger.info(f"Loaded {model_id} (type={self.model_type})")
         if self.speakers:
             logger.info(f"Speakers: {self.speakers}")
         if self.languages:
@@ -219,7 +203,6 @@ class Qwen3TTSManager:
             "model_id": self.model_id,
             "model_key": self.model_key,
             "model_type": self.model_type,
-            "model_size": self.model_size,
             "speakers": self.speakers,
             "languages": self.languages,
             "flash_attention": self._flash_attn_available,

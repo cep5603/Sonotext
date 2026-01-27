@@ -147,7 +147,7 @@ def get_engines():
             {
                 "id": "qwen3",
                 "name": "Qwen3-TTS",
-                "description": "Expressive, multilingual TTS (0.6B/1.7B params)",
+                "description": "Expressive, multilingual TTS (1.7B params)",
                 "loaded": qwen3_manager.is_loaded,
             },
         ]
@@ -160,15 +160,11 @@ def get_qwen3_info():
     return qwen3_manager.get_model_info()
 
 
-class LoadQwen3Request(BaseModel):
-    model_size: str = "1.7B"  # "0.6B" or "1.7B"
-
-
 @app.post("/api/qwen3/load")
-def load_qwen3_model(req: LoadQwen3Request):
+def load_qwen3_model():
     """Load a Qwen3-TTS model."""
     try:
-        qwen3_manager.load_model(req.model_size)
+        qwen3_manager.load_model("custom-1.7B")
         return qwen3_manager.get_model_info()
     except Exception as e:
         logging.error(f"Failed to load Qwen3-TTS: {e}")
@@ -665,9 +661,9 @@ async def generate_audio(req: GenerateRequest):
             
             # Build model identifier for history
             if req.engine == "qwen3":
-                model_name = f"qwen3-{qwen3_manager.model_size or 'unknown'}"
+                model_name = "Qwen3-TTS"
             else:
-                model_name = "kokoro"
+                model_name = "Kokoro"
             
             entry = history_manager.add_entry(req.text, voice_name, req.speed, filename, duration, model_name)
             
