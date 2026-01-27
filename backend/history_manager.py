@@ -89,27 +89,6 @@ class HistoryManager:
                 break
         history = [h for h in history if h["id"] != entry_id]
         self._save_history(history)
-        
-    def update_missing_durations(self):
-        """Calculate and update duration for entries missing it."""
-        import soundfile as sf
-        history = self._load_history()
-        updated = False
-        
-        for entry in history:
-            if entry.get("duration") is None:
-                filepath = self.get_output_path(entry["filename"])
-                if os.path.exists(filepath):
-                    try:
-                        info = sf.info(filepath)
-                        entry["duration"] = info.duration
-                        updated = True
-                    except Exception:
-                        pass
-        
-        if updated:
-            self._save_history(history)
-        return updated
 
     def rename_entry(self, entry_id: str, new_name: str) -> Dict | None:
         """Rename a history entry, preserving UUID suffix."""

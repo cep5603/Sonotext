@@ -2,7 +2,7 @@ import os
 os.environ["HF_HOME"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hub")
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -441,7 +441,6 @@ def unload_llm_model():
 
 @app.get("/api/history")
 def get_history():
-    history_manager.update_missing_durations()
     return history_manager.get_history()
 
 @app.delete("/api/history/{entry_id}")
