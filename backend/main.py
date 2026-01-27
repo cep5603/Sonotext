@@ -1,4 +1,7 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+import os
+os.environ["HF_HOME"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hub")
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +16,8 @@ import logging
 import uuid
 import asyncio
 from model_manager import model_manager
+from qwen_tts_manager import qwen3_manager
+from voice_profiles import voice_profile_manager, DEFAULT_REFERENCE_TEXT
 from pdf_processor import extract_text_from_pdf
 from history_manager import history_manager
 import llm_service
@@ -37,6 +42,9 @@ class GenerateRequest(BaseModel):
     voice: str = "af_heart"
     speed: float = 1.0
     lang: str | None = None  # None means auto-detect from voice
+    engine: str = "kokoro"  # "kokoro" or "qwen3"
+    instruct: str | None = None  # Qwen3-TTS emotion/style instruction
+    voice_profile_id: str | None = None  # Custom voice profile for cloning
 
 class CleanupRequest(BaseModel):
     text: str
@@ -61,12 +69,337 @@ def split_into_chunks(text: str, max_chars: int = 500) -> list[str]:
     
     return chunks if chunks else [text]
 
+def crossfade_chunks(chunks: list[np.ndarray], sample_rate: int, crossfade_ms: int = 200) -> np.ndarray:
+    """
+    Concatenate audio chunks with crossfade blending to smooth transitions.
+    
+    Args:
+        chunks: List of audio arrays (numpy float32)
+        sample_rate: Audio sample rate in Hz
+        crossfade_ms: Crossfade duration in milliseconds
+    
+    Returns:
+        Single concatenated audio array with crossfaded transitions
+    """
+    if not chunks:
+        return np.array([], dtype=np.float32)
+    if len(chunks) == 1:
+        return chunks[0]
+    
+    crossfade_samples = int(sample_rate * crossfade_ms / 1000)
+    
+    # Normalize each chunk to prevent volume jumps
+    normalized = []
+    for chunk in chunks:
+        if len(chunk) > 0:
+            peak = np.max(np.abs(chunk))
+            if peak > 0:
+                chunk = chunk / peak * 0.95  # Normalize to 95% to prevent clipping
+        normalized.append(chunk)
+    
+    # Build output with crossfades
+    result = normalized[0].copy()
+    
+    for i in range(1, len(normalized)):
+        current = normalized[i]
+        
+        if len(result) < crossfade_samples or len(current) < crossfade_samples:
+            # Chunks too short for crossfade, just concatenate
+            result = np.concatenate([result, current])
+        else:
+            # Create crossfade: fade out end of previous, fade in start of current
+            fade_out = np.linspace(1.0, 0.0, crossfade_samples, dtype=np.float32)
+            fade_in = np.linspace(0.0, 1.0, crossfade_samples, dtype=np.float32)
+            
+            # Blend the overlapping region
+            overlap = result[-crossfade_samples:] * fade_out + current[:crossfade_samples] * fade_in
+            
+            # Concatenate: previous (minus overlap) + blended overlap + current (minus overlap)
+            result = np.concatenate([
+                result[:-crossfade_samples],
+                overlap,
+                current[crossfade_samples:]
+            ])
+    
+    return result
+
 @app.get("/api/voices")
-def get_voices():
-    """Return available voice IDs."""
+def get_voices(engine: str = "kokoro"):
+    """Return available voice IDs for the specified engine."""
+    if engine == "qwen3":
+        return {"voices": qwen3_manager.get_voices()}
     if not model_manager.voices:
-        return []
-    return model_manager.voices
+        return {"voices": []}
+    return {"voices": model_manager.voices}
+
+
+@app.get("/api/engines")
+def get_engines():
+    """Return available TTS engines and their status."""
+    return {
+        "engines": [
+            {
+                "id": "kokoro",
+                "name": "Kokoro",
+                "description": "Fast, lightweight TTS (82M params)",
+                "loaded": True,  # Kokoro is always loaded
+            },
+            {
+                "id": "qwen3",
+                "name": "Qwen3-TTS",
+                "description": "Expressive, multilingual TTS (1.7B params)",
+                "loaded": qwen3_manager.is_loaded,
+            },
+        ]
+    }
+
+
+@app.get("/api/qwen3/info")
+def get_qwen3_info():
+    """Get Qwen3-TTS model info."""
+    return qwen3_manager.get_model_info()
+
+
+@app.post("/api/qwen3/load")
+def load_qwen3_model():
+    """Load a Qwen3-TTS model."""
+    try:
+        qwen3_manager.load_model("custom-1.7B")
+        return qwen3_manager.get_model_info()
+    except Exception as e:
+        logging.error(f"Failed to load Qwen3-TTS: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/qwen3/unload")
+def unload_qwen3_model():
+    """Unload the Qwen3-TTS model to free VRAM."""
+    qwen3_manager.unload_model()
+    return {"status": "success"}
+
+
+# Voice Profile API Endpoints
+
+@app.get("/api/voice-profiles")
+def list_voice_profiles():
+    """List all saved voice profiles."""
+    profiles = voice_profile_manager.list_profiles()
+    return {
+        "profiles": [p.to_dict() for p in profiles]
+    }
+
+
+@app.get("/api/voice-profiles/{profile_id}")
+def get_voice_profile(profile_id: str):
+    """Get a specific voice profile."""
+    profile = voice_profile_manager.get_profile(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Voice profile not found")
+    return profile.to_dict()
+
+
+class CreateVoiceDesignRequest(BaseModel):
+    name: str
+    description: str  # Voice design instruction
+    language: str = "Auto"
+
+
+@app.post("/api/voice-profiles/design")
+async def create_voice_profile_from_design(req: CreateVoiceDesignRequest):
+    """
+    Create a new voice profile from natural language description.
+    
+    Requires loading the VoiceDesign model, generating reference audio,
+    then switching to Base model for future cloning.
+    """
+    try:
+        # Load VoiceDesign model
+        qwen3_manager.load_model("design-1.7B")
+        
+        # Generate reference audio
+        reference_audio, sr = qwen3_manager.generate_voice_design(
+            text=DEFAULT_REFERENCE_TEXT,
+            voice_description=req.description,
+            language=req.language,
+        )
+        
+        # Create and save profile
+        profile = voice_profile_manager.create_from_design(
+            name=req.name,
+            description=req.description,
+            reference_audio=reference_audio,
+            sample_rate=sr,
+            reference_text=DEFAULT_REFERENCE_TEXT,
+            language=req.language,
+        )
+        
+        return profile.to_dict()
+        
+    except Exception as e:
+        logging.error(f"Failed to create voice profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/voice-profiles/upload")
+async def create_voice_profile_from_upload(
+    name: str = Form(...),
+    transcript: str = Form(...),
+    language: str = Form("Auto"),
+    audio: UploadFile = File(...),
+):
+    """
+    Create a voice profile from uploaded audio file.
+    
+    The audio should be a short (~10 second) sample with the transcript provided.
+    """
+    try:
+        audio_data = await audio.read()
+        
+        profile = voice_profile_manager.create_from_upload(
+            name=name,
+            audio_data=audio_data,
+            transcript=transcript,
+            language=language,
+        )
+        
+        return profile.to_dict()
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logging.error(f"Failed to create voice profile from upload: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/voice-profiles/{profile_id}")
+def delete_voice_profile(profile_id: str):
+    """Delete a voice profile."""
+    success = voice_profile_manager.delete_profile(profile_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Voice profile not found")
+    return {"status": "success"}
+
+
+@app.post("/api/transcribe")
+async def transcribe_audio(
+    audio: UploadFile = File(...),
+    language: str = "eng",
+):
+    """
+    Transcribe an audio file using faster-whisper.
+    
+    Uses CTranslate2 backend for 4x faster inference and lower VRAM.
+    Used for generating transcripts for voice cloning reference audio.
+    """
+    import tempfile
+    import torch
+    from faster_whisper import WhisperModel
+    
+    try:
+        # Save uploaded file to temp location
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            content = await audio.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+        
+        try:
+            # Load faster-whisper model
+            logging.info("Loading faster-whisper model for transcription...")
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            compute_type = "float16" if device == "cuda" else "int8"
+            
+            model = WhisperModel("small", device=device, compute_type=compute_type)
+            
+            # Map language codes
+            lang_map = {
+                "eng": "en",
+                "cmn": "zh", 
+                "jpn": "ja",
+                "kor": "ko",
+                "fra": "fr",
+                "deu": "de",
+                "spa": "es",
+                "por": "pt",
+                "rus": "ru",
+                "ita": "it",
+            }
+            whisper_lang = lang_map.get(language, "en")
+            
+            # Transcribe
+            segments, info = model.transcribe(tmp_path, language=whisper_lang)
+            transcript = " ".join([segment.text for segment in segments]).strip()
+            
+            # Cleanup model
+            del model
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            logging.info("faster-whisper model unloaded")
+            
+            return {"transcript": transcript}
+            
+        finally:
+            # Clean up temp file
+            import os
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+                
+    except Exception as e:
+        logging.error(f"Transcription failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class PreviewVoiceRequest(BaseModel):
+    text: str = "Hello, this is a preview of my voice."
+
+
+@app.post("/api/voice-profiles/{profile_id}/preview")
+async def preview_voice_profile(profile_id: str, req: PreviewVoiceRequest):
+    """
+    Generate a short preview using a voice profile.
+    
+    Returns the audio as a WAV file.
+    """
+    profile = voice_profile_manager.get_profile(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Voice profile not found")
+    
+    ref_audio = voice_profile_manager.get_reference_audio(profile_id)
+    if ref_audio is None:
+        raise HTTPException(status_code=404, detail="Reference audio not found")
+    
+    try:
+        # Load Base model for cloning
+        qwen3_manager.load_model("base-1.7B")
+        
+        # Create voice clone prompt
+        voice_clone_prompt = qwen3_manager.create_voice_clone_prompt(
+            ref_audio=ref_audio[0],
+            ref_audio_sr=ref_audio[1],
+            ref_text=profile.reference_text,
+        )
+        
+        # Generate preview audio
+        preview_audio, sr = qwen3_manager.generate_voice_clone(
+            text=req.text,
+            voice_clone_prompt=voice_clone_prompt,
+            language=profile.language,
+        )
+        
+        # Return as WAV
+        buffer = io.BytesIO()
+        sf.write(buffer, preview_audio, sr, format='WAV')
+        buffer.seek(0)
+        
+        return StreamingResponse(
+            buffer,
+            media_type="audio/wav",
+            headers={"Content-Disposition": f"attachment; filename=preview-{profile_id[:8]}.wav"}
+        )
+        
+    except Exception as e:
+        logging.error(f"Failed to generate preview: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/llm-status")
 def get_llm_status():
@@ -239,6 +572,37 @@ async def generate_audio(req: GenerateRequest):
             all_samples = []
             sample_rate = None
             
+            # If using a voice profile, set up cloning
+            voice_clone_prompt = None
+            voice_name = req.voice  # Default to speaker name
+            if req.voice_profile_id:
+                yield {
+                    "event": "progress",
+                    "data": json.dumps({"progress": 0, "chunk": 0, "total": total_chunks, "message": "Loading voice profile..."})
+                }
+                
+                profile = voice_profile_manager.get_profile(req.voice_profile_id)
+                if profile is None:
+                    raise ValueError(f"Voice profile not found: {req.voice_profile_id}")
+                
+                # Use profile name as voice identifier for history
+                voice_name = profile.name
+                
+                ref_audio = voice_profile_manager.get_reference_audio(req.voice_profile_id)
+                if ref_audio is None:
+                    raise ValueError(f"Reference audio not found for profile: {req.voice_profile_id}")
+                
+                # Load Base model for cloning
+                await asyncio.to_thread(qwen3_manager.load_model, "base-1.7B")
+                
+                # Create voice clone prompt (reusable for all chunks)
+                voice_clone_prompt = await asyncio.to_thread(
+                    qwen3_manager.create_voice_clone_prompt,
+                    ref_audio[0],
+                    ref_audio[1],
+                    profile.reference_text,
+                )
+            
             for i, chunk in enumerate(chunks):
                 progress = int((i / total_chunks) * 100)
                 yield {
@@ -246,13 +610,41 @@ async def generate_audio(req: GenerateRequest):
                     "data": json.dumps({"progress": progress, "chunk": i + 1, "total": total_chunks})
                 }
                 
-                samples, sr = model_manager.generate_audio(chunk, req.voice, req.speed, req.lang)
+                # Use the appropriate TTS engine (run in thread to avoid blocking)
+                if voice_clone_prompt is not None:
+                    # Voice cloning mode - uses Base model
+                    samples, sr = await asyncio.to_thread(
+                        qwen3_manager.generate_voice_clone,
+                        chunk,
+                        voice_clone_prompt,
+                        req.lang or "auto",
+                    )
+                elif req.engine == "qwen3":
+                    samples, sr = await asyncio.to_thread(
+                        qwen3_manager.generate_audio,
+                        chunk,
+                        req.voice,
+                        req.lang or "auto",
+                        req.instruct,
+                    )
+                else:
+                    samples, sr = await asyncio.to_thread(
+                        model_manager.generate_audio,
+                        chunk,
+                        req.voice,
+                        req.speed,
+                        req.lang,
+                    )
                 all_samples.append(samples)
                 sample_rate = sr
                 
                 await asyncio.sleep(0.01)
             
-            final_samples = np.concatenate(all_samples)
+            # Crossfade and normalize chunks for smoother transitions
+            if len(all_samples) > 1:
+                final_samples = crossfade_chunks(all_samples, sample_rate, crossfade_ms=200)
+            else:
+                final_samples = all_samples[0] if all_samples else np.array([], dtype=np.float32)
             duration = len(final_samples) / sample_rate
             
             # Try to generate a descriptive filename using LLM
@@ -267,7 +659,13 @@ async def generate_audio(req: GenerateRequest):
             filepath = history_manager.get_output_path_for_new_file(filename)
             sf.write(filepath, final_samples, sample_rate, format='WAV')
             
-            entry = history_manager.add_entry(req.text, req.voice, req.speed, filename, duration)
+            # Build model identifier for history
+            if req.engine == "qwen3":
+                model_name = "Qwen3-TTS"
+            else:
+                model_name = "Kokoro"
+            
+            entry = history_manager.add_entry(req.text, voice_name, req.speed, filename, duration, model_name)
             
             yield {
                 "event": "complete",
@@ -369,4 +767,6 @@ async def show_in_explorer(req: ShowInExplorerRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    # Note: reload=False to prevent restarts during Qwen3-TTS model loading
+    # Restart manually after code changes
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)

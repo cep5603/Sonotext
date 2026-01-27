@@ -46,6 +46,9 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
     const [voice, setVoice] = useState("af_heart")
     const [lang, setLang] = useState<string | null>(null)  // null = auto-detect
     const [speed, setSpeed] = useState([1.0])
+    const [engine, setEngine] = useState<"kokoro" | "qwen3">("kokoro")
+    const [instruct, setInstruct] = useState("")  // Qwen3-TTS emotion/style instruction
+    const [voiceProfileId, setVoiceProfileId] = useState<string | null>(null)  // Custom voice for cloning
     const [audioUrl, setAudioUrl] = useState<string | null>(null)
     const [audioFilename, setAudioFilename] = useState<string | undefined>(undefined)
     const [isDragging, setIsDragging] = useState(false)
@@ -71,6 +74,17 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
     const [copied, setCopied] = useState(false)
     const queryClient = useQueryClient()
 
+    // Switch to appropriate default voice when engine changes
+    useEffect(() => {
+        if (engine === "qwen3") {
+            setVoice("aiden")
+        } else {
+            setVoice("af_heart")
+        }
+        // Reset language to auto since codes differ between engines
+        setLang(null)
+    }, [engine])
+
     const handleGenerate = useCallback(async () => {
         setIsGenerating(true)
         setProgress(0)
@@ -84,7 +98,15 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
             const response = await fetch("http://localhost:8000/api/generate", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text, voice, speed: speed[0], lang }),
+                body: JSON.stringify({
+                    text,
+                    voice,
+                    speed: speed[0],
+                    lang,
+                    engine,
+                    instruct: engine === "qwen3" && instruct ? instruct : null,
+                    voice_profile_id: engine === "qwen3" && voiceProfileId ? voiceProfileId : null,
+                }),
             })
 
             const reader = response.body?.getReader()
@@ -132,7 +154,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
         } finally {
             setIsGenerating(false)
         }
-    }, [text, voice, lang, speed, queryClient])
+    }, [text, voice, lang, speed, engine, instruct, voiceProfileId, queryClient])
 
     const handleCleanText = useCallback(async () => {
         setIsCleaning(true)
@@ -312,6 +334,12 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                 onLangChange={setLang}
                 speed={speed}
                 onSpeedChange={setSpeed}
+                engine={engine}
+                onEngineChange={setEngine}
+                instruct={instruct}
+                onInstructChange={setInstruct}
+                voiceProfileId={voiceProfileId}
+                onVoiceProfileChange={setVoiceProfileId}
             />
             <div className="flex-1 min-w-0 min-h-0 h-full px-8 py-4">
                 <Card className="border-none shadow-2xl bg-card/80 backdrop-blur-xl h-full flex flex-col max-w-4xl mx-auto">
@@ -337,6 +365,12 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                                         <span className="font-medium text-foreground">{formatVoiceDisplay(selectedItem.voice)}</span>
+                                        {selectedItem.model && (
+                                            <>
+                                                <span>•</span>
+                                                <span>{selectedItem.model}</span>
+                                            </>
+                                        )}
                                         <span>•</span>
                                         <span>{selectedItem.speed}x</span>
                                         <span>•</span>
@@ -383,8 +417,8 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                                 />
 
                                 <AudioPlayer
-                                    audioUrl={audioUrl}
-                                    filename={audioFilename}
+                                    audioUrl={selectedItem.url.startsWith('http') ? selectedItem.url : `http://localhost:8000${selectedItem.url}`}
+                                    filename={selectedItem.filename}
                                     autoplay={shouldAutoplay}
                                     onPlayStarted={() => setShouldAutoplay(false)}
                                     onTimeUpdate={setAudioCurrentTime}

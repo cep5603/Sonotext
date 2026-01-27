@@ -160,6 +160,44 @@ export const VOICE_DATA: LanguageGroup[] = [
             v("pm_santa", "M", "?"),
         ]),
     },
+    // Qwen3-TTS voices (multi-lingual, categorized by primary language)
+    {
+        code: "qwen3-english",
+        label: "Qwen3 English",
+        flag: "🌐",
+        voices: [
+            { id: "aiden", name: "Aiden", gender: "M", grade: "-", gradeOrder: 0 },
+            { id: "dylan", name: "Dylan", gender: "M", grade: "-", gradeOrder: 0 },
+            { id: "eric", name: "Eric", gender: "M", grade: "-", gradeOrder: 0 },
+            { id: "ryan", name: "Ryan", gender: "M", grade: "-", gradeOrder: 0 },
+            { id: "serena", name: "Serena", gender: "F", grade: "-", gradeOrder: 0 },
+        ],
+    },
+    {
+        code: "qwen3-chinese",
+        label: "Qwen3 Chinese",
+        flag: "🇨🇳",
+        voices: [
+            { id: "vivian", name: "Vivian", gender: "F", grade: "-", gradeOrder: 0 },
+            { id: "uncle_fu", name: "Uncle Fu", gender: "M", grade: "-", gradeOrder: 0 },
+        ],
+    },
+    {
+        code: "qwen3-japanese",
+        label: "Qwen3 Japanese",
+        flag: "🇯🇵",
+        voices: [
+            { id: "ono_anna", name: "Ono Anna", gender: "F", grade: "-", gradeOrder: 0 },
+        ],
+    },
+    {
+        code: "qwen3-korean",
+        label: "Qwen3 Korean",
+        flag: "🇰🇷",
+        voices: [
+            { id: "sohee", name: "Sohee", gender: "F", grade: "-", gradeOrder: 0 },
+        ],
+    },
 ]
 
 // Lookup map for quick access by voice ID
