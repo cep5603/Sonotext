@@ -45,6 +45,7 @@ class GenerateRequest(BaseModel):
     engine: str = "kokoro"  # "kokoro" or "qwen3"
     instruct: str | None = None  # Qwen3-TTS emotion/style instruction
     voice_profile_id: str | None = None  # Custom voice profile for cloning
+    chunk_size: int = 500  # Max characters per chunk for TTS
 
 class CleanupRequest(BaseModel):
     text: str
@@ -566,7 +567,7 @@ async def generate_audio(req: GenerateRequest):
     
     async def event_generator():
         try:
-            chunks = split_into_chunks(req.text)
+            chunks = split_into_chunks(req.text, max_chars=req.chunk_size)
             total_chunks = len(chunks)
             all_samples = []
             sample_rate = None
@@ -606,7 +607,12 @@ async def generate_audio(req: GenerateRequest):
                 progress = int((i / total_chunks) * 100)
                 yield {
                     "event": "progress",
-                    "data": json.dumps({"progress": progress, "chunk": i + 1, "total": total_chunks})
+                    "data": json.dumps({
+                        "progress": progress,
+                        "chunk": i + 1,
+                        "total": total_chunks,
+                        "chunk_preview": chunk[:50]
+                    })
                 }
                 
                 # Use the appropriate TTS engine (run in thread to avoid blocking)

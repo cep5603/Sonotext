@@ -49,6 +49,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
     const [engine, setEngine] = useState<"kokoro" | "qwen3">("kokoro")
     const [instruct, setInstruct] = useState("")  // Qwen3-TTS emotion/style instruction
     const [voiceProfileId, setVoiceProfileId] = useState<string | null>(null)  // Custom voice for cloning
+    const [chunkSize, setChunkSize] = useState([500])  // Max chars per TTS chunk
     const [audioUrl, setAudioUrl] = useState<string | null>(null)
     const [audioFilename, setAudioFilename] = useState<string | undefined>(undefined)
     const [isDragging, setIsDragging] = useState(false)
@@ -106,6 +107,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                     engine,
                     instruct: engine === "qwen3" && instruct ? instruct : null,
                     voice_profile_id: engine === "qwen3" && voiceProfileId ? voiceProfileId : null,
+                    chunk_size: chunkSize[0],
                 }),
             })
 
@@ -129,7 +131,8 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
 
                         if (data.progress !== undefined) {
                             setProgress(data.progress)
-                            setProgressText(`Synthesizing chunk ${data.chunk} of ${data.total}...`)
+                            const preview = data.chunk_preview ? ` — "${data.chunk_preview}..."` : ""
+                            setProgressText(`Synthesizing chunk ${data.chunk} of ${data.total}${preview}`)
                             totalChunks = data.total
                         } else if (data.url) {
                             const endTime = performance.now()
@@ -154,7 +157,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
         } finally {
             setIsGenerating(false)
         }
-    }, [text, voice, lang, speed, engine, instruct, voiceProfileId, queryClient])
+    }, [text, voice, lang, speed, engine, instruct, voiceProfileId, chunkSize, queryClient])
 
     const handleCleanText = useCallback(async () => {
         setIsCleaning(true)
@@ -340,6 +343,8 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                 onInstructChange={setInstruct}
                 voiceProfileId={voiceProfileId}
                 onVoiceProfileChange={setVoiceProfileId}
+                chunkSize={chunkSize}
+                onChunkSizeChange={setChunkSize}
             />
             <div className="flex-1 min-w-0 min-h-0 h-full px-8 py-4">
                 <Card className="border-none shadow-2xl bg-card/80 backdrop-blur-xl h-full flex flex-col max-w-4xl mx-auto">

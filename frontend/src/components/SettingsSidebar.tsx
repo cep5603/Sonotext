@@ -30,6 +30,8 @@ interface SettingsSidebarProps {
     onInstructChange: (instruct: string) => void
     voiceProfileId: string | null
     onVoiceProfileChange: (profileId: string | null) => void
+    chunkSize: number[]
+    onChunkSizeChange: (size: number[]) => void
 }
 
 const KOKORO_LANGUAGE_OPTIONS = [
@@ -174,6 +176,8 @@ export function SettingsSidebar({
     onInstructChange,
     voiceProfileId,
     onVoiceProfileChange,
+    chunkSize,
+    onChunkSizeChange,
 }: SettingsSidebarProps) {
     const queryClient = useQueryClient()
 
@@ -342,6 +346,20 @@ export function SettingsSidebar({
                             />
                         </div>
                     )}
+
+                    <div className="space-y-2">
+                        <div className="flex justify-between">
+                            <Label>Chunk Size</Label>
+                            <span className="text-sm text-muted-foreground">{chunkSize[0]} chars</span>
+                        </div>
+                        <Slider
+                            value={chunkSize}
+                            onValueChange={onChunkSizeChange}
+                            min={100}
+                            max={2000}
+                            step={50}
+                        />
+                    </div>
                 </div>
 
                 {/* Separator */}
