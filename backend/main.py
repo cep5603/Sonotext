@@ -281,6 +281,51 @@ def delete_voice_profile(profile_id: str):
     return {"status": "success"}
 
 
+@app.get("/api/voice-profiles/{profile_id}/reference-audio")
+async def get_reference_audio(profile_id: str):
+    """Serve the reference audio file for a voice profile (for preview/playback)."""
+    ref = voice_profile_manager.get_reference_audio(profile_id)
+    if ref is None:
+        raise HTTPException(status_code=404, detail="Reference audio not found")
+    
+    audio, sr = ref
+    buffer = io.BytesIO()
+    sf.write(buffer, audio, sr, format='WAV')
+    buffer.seek(0)
+    
+    return StreamingResponse(
+        buffer,
+        media_type="audio/wav",
+        headers={"Content-Disposition": f"inline; filename=reference-{profile_id[:8]}.wav"}
+    )
+
+
+class RenameVoiceProfileRequest(BaseModel):
+    name: str
+
+
+@app.patch("/api/voice-profiles/{profile_id}")
+def rename_voice_profile(profile_id: str, req: RenameVoiceProfileRequest):
+    """Rename a voice profile."""
+    if not req.name or not req.name.strip():
+        raise HTTPException(status_code=400, detail="Name cannot be empty")
+    
+    profile = voice_profile_manager.rename_profile(profile_id, req.name.strip())
+    if not profile:
+        raise HTTPException(status_code=404, detail="Voice profile not found")
+    return profile.to_dict()
+
+
+class ReorderVoiceProfilesRequest(BaseModel):
+    order: list[str]
+
+
+@app.put("/api/voice-profiles/order")
+def reorder_voice_profiles(req: ReorderVoiceProfilesRequest):
+    """Update the display order of voice profiles."""
+    voice_profile_manager.save_order(req.order)
+    return {"status": "success"}
+
 @app.post("/api/transcribe")
 async def transcribe_audio(
     audio: UploadFile = File(...),
@@ -670,7 +715,7 @@ async def generate_audio(req: GenerateRequest):
             else:
                 model_name = "Kokoro"
             
-            entry = history_manager.add_entry(req.text, voice_name, req.speed, filename, duration, model_name)
+            entry = history_manager.add_entry(req.text, voice_name, req.speed, filename, duration, model_name, req.voice_profile_id)
             
             yield {
                 "event": "complete",

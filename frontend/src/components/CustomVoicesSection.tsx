@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { Loader2, Plus, Trash2, Mic, Palette, Upload, Wand2 } from "lucide-react"
+import { Loader2, Mic, Palette, Upload, Wand2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,6 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from "@/components/ui/dialog"
 import {
     Tabs,
@@ -26,12 +25,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { VoiceManagerDialog } from "@/components/VoiceManagerDialog"
 import type { VoiceProfile } from "@/types"
 
 interface CustomVoicesSectionProps {
@@ -43,8 +38,8 @@ export function CustomVoicesSection({
     selectedProfileId,
     onProfileSelect
 }: CustomVoicesSectionProps) {
-    const queryClient = useQueryClient()
-    const [dialogOpen, setDialogOpen] = useState(false)
+    const [managerOpen, setManagerOpen] = useState(false)
+    const [createDialogOpen, setCreateDialogOpen] = useState(false)
 
     const { data: profiles, isLoading } = useQuery({
         queryKey: ["voice-profiles"],
@@ -54,17 +49,8 @@ export function CustomVoicesSection({
         },
     })
 
-    const deleteMutation = useMutation({
-        mutationFn: async (profileId: string) => {
-            await axios.delete(`http://localhost:8000/api/voice-profiles/${profileId}`)
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["voice-profiles"] })
-            if (selectedProfileId) {
-                onProfileSelect(null)
-            }
-        },
-    })
+    // Find selected profile
+    const selectedProfile = profiles?.find((p) => p.id === selectedProfileId)
 
     if (isLoading) {
         return (
@@ -78,13 +64,17 @@ export function CustomVoicesSection({
         <div className="space-y-3">
             <div className="flex items-center justify-between">
                 <Label className="text-sm">Custom Voice</Label>
-                <CreateVoiceDialog
-                    open={dialogOpen}
-                    onOpenChange={setDialogOpen}
-                />
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setManagerOpen(true)}
+                >
+                    Manage...
+                </Button>
             </div>
 
-            {/* Voice Profile List */}
+            {/* Quick selection */}
             <div className="space-y-1">
                 {/* None option */}
                 <button
@@ -99,62 +89,49 @@ export function CustomVoicesSection({
                     None (use speaker)
                 </button>
 
-                {profiles?.map((profile) => (
+                {/* Selected profile (if any) */}
+                {selectedProfile && (
                     <div
-                        key={profile.id}
                         className={cn(
-                            "group flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer",
-                            selectedProfileId === profile.id
-                                ? "bg-primary text-primary-foreground"
-                                : "hover:bg-muted"
+                            "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
+                            "bg-primary text-primary-foreground"
                         )}
-                        onClick={() => onProfileSelect(profile.id)}
                     >
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
-                                {profile.source === "designed" ? (
+                                {selectedProfile.source === "designed" ? (
                                     <Palette className="h-3 w-3 shrink-0 opacity-70" />
                                 ) : (
                                     <Mic className="h-3 w-3 shrink-0 opacity-70" />
                                 )}
-                                <span className="truncate font-medium">{profile.name}</span>
+                                <span className="truncate font-medium">{selectedProfile.name}</span>
                             </div>
-                            {profile.description && (
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <p className="text-xs opacity-70 truncate mt-0.5 cursor-help">
-                                            {profile.description}
-                                        </p>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-xs">
-                                        {profile.description}
-                                    </TooltipContent>
-                                </Tooltip>
-                            )}
                         </div>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className={cn(
-                                "h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity",
-                                selectedProfileId === profile.id && "hover:bg-primary-foreground/20"
-                            )}
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                deleteMutation.mutate(profile.id)
-                            }}
-                        >
-                            <Trash2 className="h-3 w-3" />
-                        </Button>
                     </div>
-                ))}
+                )}
 
-                {profiles?.length === 0 && (
-                    <p className="text-xs text-muted-foreground text-center py-2">
-                        No custom voices yet
+                {/* Show count if there are more profiles */}
+                {profiles && profiles.length > 0 && !selectedProfile && (
+                    <p className="text-xs text-muted-foreground text-center py-1">
+                        {profiles.length} voice{profiles.length !== 1 ? "s" : ""} available
                     </p>
                 )}
             </div>
+
+            {/* Voice Manager Dialog */}
+            <VoiceManagerDialog
+                open={managerOpen}
+                onOpenChange={setManagerOpen}
+                selectedProfileId={selectedProfileId}
+                onProfileSelect={onProfileSelect}
+                onCreateVoice={() => setCreateDialogOpen(true)}
+            />
+
+            {/* Create Voice Dialog */}
+            <CreateVoiceDialog
+                open={createDialogOpen}
+                onOpenChange={setCreateDialogOpen}
+            />
         </div>
     )
 }
@@ -262,14 +239,8 @@ function CreateVoiceDialog({ open, onOpenChange }: CreateVoiceDialogProps) {
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-6 px-2">
-                    <Plus className="h-3 w-3 mr-1" />
-                    Add
-                </Button>
-            </DialogTrigger>
             <DialogContent className="sm:max-w-md">
-                <DialogHeader>
+                <DialogHeader className="mb-4">
                     <DialogTitle>Create Custom Voice</DialogTitle>
                 </DialogHeader>
 

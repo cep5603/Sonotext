@@ -70,7 +70,6 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
     const [audioCurrentTime, setAudioCurrentTime] = useState(0)
     const [isAudioPlaying, setIsAudioPlaying] = useState(false)
     const [seekToTime, setSeekToTime] = useState<number | null>(null)
-    const [isLoadingAlignment, setIsLoadingAlignment] = useState(false)
     const [autoScroll, setAutoScroll] = useState(true)
     const [copied, setCopied] = useState(false)
     const queryClient = useQueryClient()
@@ -303,7 +302,6 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
         if (!selectedItem) return
 
         const fetchAlignment = async () => {
-            setIsLoadingAlignment(true)
             try {
                 const response = await fetch(`http://localhost:8000/api/alignment/${selectedItem.id}`)
                 if (response.ok) {
@@ -313,8 +311,6 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
             } catch (error) {
                 console.error("Failed to fetch alignment:", error)
                 // Silently fail - we'll just show plain text
-            } finally {
-                setIsLoadingAlignment(false)
             }
         }
 

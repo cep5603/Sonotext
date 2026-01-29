@@ -98,9 +98,50 @@ class VoiceProfileManager:
                 except Exception as e:
                     logger.warning(f"Failed to load profile from {profile_json}: {e}")
         
-        # Sort by creation time (newest first)
-        profiles.sort(key=lambda p: p.created_at, reverse=True)
+        # Sort by user-defined order, fallback to creation time
+        order = self.load_order()
+        if order:
+            order_map = {pid: i for i, pid in enumerate(order)}
+            # Profiles in order come first, then rest by creation time (newest first)
+            profiles.sort(key=lambda p: (order_map.get(p.id, len(order)), -p.created_at))
+        else:
+            profiles.sort(key=lambda p: p.created_at, reverse=True)
         return profiles
+
+    def load_order(self) -> list[str]:
+        """Load the user-defined profile display order."""
+        order_path = self.profiles_dir / "order.json"
+        if order_path.exists():
+            try:
+                with open(order_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to load order file: {e}")
+        return []
+
+    def save_order(self, profile_ids: list[str]) -> None:
+        """Save the user-defined profile display order."""
+        order_path = self.profiles_dir / "order.json"
+        with open(order_path, "w", encoding="utf-8") as f:
+            json.dump(profile_ids, f)
+        logger.info(f"Saved voice profile order: {len(profile_ids)} profiles")
+
+    def rename_profile(self, profile_id: str, new_name: str) -> Optional[VoiceProfile]:
+        """Rename a voice profile."""
+        profile = self.get_profile(profile_id)
+        if not profile:
+            return None
+        
+        # Update the profile name
+        profile.name = new_name
+        
+        # Save updated metadata
+        profile_json = self._get_profile_json_path(profile_id)
+        with open(profile_json, "w", encoding="utf-8") as f:
+            json.dump(profile.to_dict(), f, indent=2)
+        
+        logger.info(f"Renamed voice profile {profile_id} to '{new_name}'")
+        return profile
 
     def get_profile(self, profile_id: str) -> Optional[VoiceProfile]:
         """Get a specific voice profile by ID."""

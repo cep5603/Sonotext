@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { getVoiceInfo, getVoiceLanguage } from "@/lib/voiceData"
-import type { HistoryItem } from "@/types"
+import type { HistoryItem, VoiceProfile } from "@/types"
 
 interface HistorySidebarProps {
     onSelectItem: (item: HistoryItem, autoplay?: boolean) => void
@@ -239,6 +239,32 @@ export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
         },
     })
 
+    // Fetch voice profiles for name resolution
+    const { data: voiceProfiles } = useQuery({
+        queryKey: ["voice-profiles"],
+        queryFn: async () => {
+            const res = await axios.get("http://localhost:8000/api/voice-profiles")
+            return res.data.profiles as VoiceProfile[]
+        },
+    })
+
+    // Build profile ID to name map for fast lookup
+    const profileNameMap = new Map<string, string>()
+    voiceProfiles?.forEach((p) => profileNameMap.set(p.id, p.name))
+
+    // Resolve voice display: check profile ID first, fallback to stored voice
+    const getVoiceDisplayName = (item: HistoryItem) => {
+        if (item.voice_profile_id) {
+            const currentName = profileNameMap.get(item.voice_profile_id)
+            if (currentName) {
+                return `🎤 ${currentName}`  // Custom voice indicator
+            }
+            // Profile was deleted, fall back to stored name
+            return `🎤 ${item.voice}`
+        }
+        return formatVoiceDisplay(item.voice)
+    }
+
     const deleteMutation = useMutation({
         mutationFn: async (id: string) => {
             await axios.delete(`http://localhost:8000/api/history/${id}`)
@@ -351,7 +377,7 @@ export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
                                 {item.text || "No text"}
                             </p>
                             <div className="flex items-center text-xs text-muted-foreground gap-1.5 flex-wrap pt-1">
-                                <span>{formatVoiceDisplay(item.voice)}</span>
+                                <span>{getVoiceDisplayName(item)}</span>
                                 <span>•</span>
                                 <span>{item.speed}x</span>
                                 <span>•</span>
