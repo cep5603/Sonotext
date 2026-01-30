@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { MoreVertical, Play, Trash2, Download, Clock, FolderOpen, SquarePen, Loader2, Check, X, Wand2, TriangleAlert } from "lucide-react"
+import { MoreVertical, Play, Trash2, Download, Clock, FolderOpen, SquarePen, Loader2, Check, X, Wand2, TriangleAlert, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -44,6 +45,15 @@ function formatVoiceDisplay(voiceId: string): string {
         return `${lang.flag} ${voice.name}`
     }
     return voiceId // Fallback to raw ID
+}
+
+// Normalize string for search: lowercase, strip punctuation/symbols, collapse whitespace
+function normalizeForSearch(str: string): string {
+    return str
+        .toLowerCase()
+        .replace(/[\p{P}\p{S}]/gu, "") // Unicode-aware punctuation & symbol removal
+        .replace(/\s+/g, " ")
+        .trim()
 }
 
 // Inline editable title component
@@ -218,6 +228,7 @@ export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
     const [renamingId, setRenamingId] = useState<string | null>(null)
     const [autoRenamingIds, setAutoRenamingIds] = useState<Set<string>>(new Set())
     const [autoRenameErrors, setAutoRenameErrors] = useState<Set<string>>(new Set())
+    const [searchQuery, setSearchQuery] = useState("")
 
     // Query LLM availability
     const { data: llmStatus } = useQuery({
@@ -264,6 +275,29 @@ export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
         }
         return formatVoiceDisplay(item.voice)
     }
+
+    // Filter history based on search query (normalized matching)
+    const filteredHistory = useMemo(() => {
+        if (!history) return []
+        if (!searchQuery.trim()) return history
+
+        const normalizedQuery = normalizeForSearch(searchQuery)
+        if (!normalizedQuery) return history
+
+        return history.filter((item) => {
+            const title = normalizeForSearch(formatFilenameDisplay(item.filename))
+            const text = normalizeForSearch(item.text)
+            const voice = normalizeForSearch(getVoiceDisplayName(item))
+            const model = normalizeForSearch(item.model ?? "")
+
+            return (
+                title.includes(normalizedQuery) ||
+                text.includes(normalizedQuery) ||
+                voice.includes(normalizedQuery) ||
+                model.includes(normalizedQuery)
+            )
+        })
+    }, [history, searchQuery, profileNameMap])
 
     const deleteMutation = useMutation({
         mutationFn: async (id: string) => {
@@ -351,11 +385,32 @@ export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
 
     return (
         <div className="w-[26rem] border-l border-border bg-card/50 backdrop-blur-sm h-full flex flex-col shrink-0">
-            <div className="p-4 border-b border-border shrink-0">
-                <h2 className="font-semibold tracking-tight">Generation History</h2>
+            <div className="p-4 border-b border-border shrink-0 flex items-center gap-3">
+                <h2 className="font-semibold tracking-tight shrink-0">Generation History</h2>
+                <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                        type="text"
+                        placeholder="Search..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="h-8 pl-8 pr-8 text-sm"
+                        aria-label="Search generation history"
+                    />
+                    {searchQuery && (
+                        <button
+                            type="button"
+                            onClick={() => setSearchQuery("")}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-accent rounded"
+                            aria-label="Clear search"
+                        >
+                            <X className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                    )}
+                </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {history?.map((item) => (
+                {filteredHistory.map((item) => (
                     <div
                         key={item.id}
                         className="rounded-lg border border-border bg-background p-3 transition-all hover:bg-accent/50 cursor-pointer"
@@ -433,9 +488,11 @@ export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
                         </div>
                     </div>
                 ))}
-                {history?.length === 0 && (
+                {filteredHistory.length === 0 && (
                     <div className="text-center text-sm text-muted-foreground py-8">
-                        No history yet. Generated audio will appear here.
+                        {history?.length === 0
+                            ? "No history yet. Generated audio will appear here."
+                            : "No results match your search."}
                     </div>
                 )}
             </div>
