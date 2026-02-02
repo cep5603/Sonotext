@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback, memo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
 import {
@@ -8,8 +8,9 @@ import {
     PointerSensor,
     useSensor,
     useSensors,
+    DragOverlay,
 } from "@dnd-kit/core"
-import type { DragEndEvent } from "@dnd-kit/core"
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core"
 import {
     arrayMove,
     SortableContext,
@@ -61,7 +62,7 @@ interface VoiceManagerDialogProps {
 }
 
 // Sortable voice item component
-function SortableVoiceItem({
+const SortableVoiceItem = memo(function SortableVoiceItem({
     profile,
     isSelected,
     onSelect,
@@ -73,10 +74,10 @@ function SortableVoiceItem({
 }: {
     profile: VoiceProfile
     isSelected: boolean
-    onSelect: () => void
-    onRename: (name: string) => void
-    onDelete: () => void
-    onPreview: () => void
+    onSelect: (id: string) => void
+    onRename: (id: string, name: string) => void
+    onDelete: (profile: VoiceProfile) => void
+    onPreview: (id: string) => void
     isPlaying: boolean
     isRenaming: boolean
 }) {
@@ -107,7 +108,7 @@ function SortableVoiceItem({
     const confirmRename = () => {
         const trimmed = editValue.trim()
         if (trimmed && trimmed !== profile.name) {
-            onRename(trimmed)
+            onRename(profile.id, trimmed)
         }
         setIsEditing(false)
     }
@@ -158,7 +159,7 @@ function SortableVoiceItem({
             {/* Voice info */}
             <div
                 className="flex-1 min-w-0 cursor-pointer"
-                onClick={onSelect}
+                onClick={() => onSelect(profile.id)}
             >
                 {isEditing ? (
                     <div
@@ -232,7 +233,7 @@ function SortableVoiceItem({
                     className="h-7 w-7"
                     onClick={(e) => {
                         e.stopPropagation()
-                        onPreview()
+                        onPreview(profile.id)
                     }}
                     title="Preview voice"
                 >
@@ -258,12 +259,40 @@ function SortableVoiceItem({
                     className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                     onClick={(e) => {
                         e.stopPropagation()
-                        onDelete()
+                        onDelete(profile)
                     }}
                     title="Delete"
                 >
                     <Trash2 className="h-3.5 w-3.5" />
                 </Button>
+            </div>
+        </div>
+    )
+})
+
+// Static voice item for drag overlay (no sortable hooks)
+function VoiceItemOverlay({ profile }: { profile: VoiceProfile }) {
+    return (
+        <div
+            className="flex items-center gap-2 px-3 py-2.5 rounded-lg border bg-card border-primary shadow-lg"
+        >
+            <div className="p-1 -ml-1 text-muted-foreground">
+                <GripVertical className="h-4 w-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                    {profile.source === "designed" ? (
+                        <Palette className="h-4 w-4 shrink-0 text-purple-500" />
+                    ) : (
+                        <Mic className="h-4 w-4 shrink-0 text-blue-500" />
+                    )}
+                    <span className="font-medium truncate">{profile.name}</span>
+                </div>
+                {profile.description && (
+                    <p className="text-xs text-muted-foreground truncate mt-0.5 ml-6">
+                        {profile.description}
+                    </p>
+                )}
             </div>
         </div>
     )
@@ -280,10 +309,15 @@ export function VoiceManagerDialog({
     const [playingId, setPlayingId] = useState<string | null>(null)
     const [renamingId, setRenamingId] = useState<string | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<VoiceProfile | null>(null)
+    const [activeId, setActiveId] = useState<string | null>(null)
     const audioRef = useRef<HTMLAudioElement>(null)
 
     const sensors = useSensors(
-        useSensor(PointerSensor),
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        }),
         useSensor(KeyboardSensor, {
             coordinateGetter: sortableKeyboardCoordinates,
         })
@@ -328,45 +362,63 @@ export function VoiceManagerDialog({
         mutationFn: async (profileId: string) => {
             await axios.delete(`http://localhost:8000/api/voice-profiles/${profileId}`)
         },
-        onSuccess: () => {
+        onSuccess: (_data: void, profileId: string) => {
             queryClient.invalidateQueries({ queryKey: ["voice-profiles"] })
-            if (deleteTarget && selectedProfileId === deleteTarget.id) {
+            if (selectedProfileId === profileId) {
                 onProfileSelect(null)
             }
             setDeleteTarget(null)
         },
     })
 
-    const handleDragEnd = (event: DragEndEvent) => {
+    const handleDragStart = useCallback((event: DragStartEvent) => {
+        setActiveId(event.active.id as string)
+    }, [])
+
+    const handleDragEnd = useCallback((event: DragEndEvent) => {
         const { active, over } = event
+        setActiveId(null)
 
-        if (over && active.id !== over.id && profiles) {
-            const oldIndex = profiles.findIndex((p) => p.id === active.id)
-            const newIndex = profiles.findIndex((p) => p.id === over.id)
-            const newOrder = arrayMove(profiles, oldIndex, newIndex)
-
-            // Optimistically update UI
-            queryClient.setQueryData<VoiceProfile[]>(["voice-profiles"], newOrder)
-
-            // Persist to backend
-            reorderMutation.mutate(newOrder.map((p) => p.id))
+        if (over && active.id !== over.id) {
+            queryClient.setQueryData<VoiceProfile[]>(["voice-profiles"], (old: VoiceProfile[] | undefined) => {
+                if (!old) return old
+                const oldIndex = old.findIndex((p) => p.id === active.id)
+                const newIndex = old.findIndex((p) => p.id === over.id)
+                const newOrder = arrayMove(old, oldIndex, newIndex)
+                // Persist to backend
+                reorderMutation.mutate(newOrder.map((p) => p.id))
+                return newOrder
+            })
         }
-    }
+    }, [queryClient, reorderMutation])
 
-    const handlePreview = (profileId: string) => {
-        if (playingId === profileId) {
-            // Stop playing
-            audioRef.current?.pause()
-            setPlayingId(null)
-        } else {
-            // Start playing
-            if (audioRef.current) {
-                audioRef.current.src = `http://localhost:8000/api/voice-profiles/${profileId}/reference-audio`
-                audioRef.current.play()
-                setPlayingId(profileId)
+    const handlePreview = useCallback((profileId: string) => {
+        setPlayingId((current) => {
+            if (current === profileId) {
+                audioRef.current?.pause()
+                return null
+            } else {
+                if (audioRef.current) {
+                    audioRef.current.src = `http://localhost:8000/api/voice-profiles/${profileId}/reference-audio`
+                    audioRef.current.play()
+                }
+                return profileId
             }
-        }
-    }
+        })
+    }, [])
+
+    const handleSelect = useCallback((profileId: string) => {
+        onProfileSelect(profileId)
+        onOpenChange(false)
+    }, [onProfileSelect, onOpenChange])
+
+    const handleRename = useCallback((id: string, name: string) => {
+        renameMutation.mutate({ id, name })
+    }, [renameMutation])
+
+    const handleDelete = useCallback((profile: VoiceProfile) => {
+        setDeleteTarget(profile)
+    }, [])
 
     // Handle audio end
     useEffect(() => {
@@ -415,6 +467,7 @@ export function VoiceManagerDialog({
                             <DndContext
                                 sensors={sensors}
                                 collisionDetection={closestCenter}
+                                onDragStart={handleDragStart}
                                 onDragEnd={handleDragEnd}
                             >
                                 <SortableContext
@@ -427,21 +480,23 @@ export function VoiceManagerDialog({
                                                 key={profile.id}
                                                 profile={profile}
                                                 isSelected={selectedProfileId === profile.id}
-                                                onSelect={() => {
-                                                    onProfileSelect(profile.id)
-                                                    onOpenChange(false)
-                                                }}
-                                                onRename={(name) =>
-                                                    renameMutation.mutate({ id: profile.id, name })
-                                                }
-                                                onDelete={() => setDeleteTarget(profile)}
-                                                onPreview={() => handlePreview(profile.id)}
+                                                onSelect={handleSelect}
+                                                onRename={handleRename}
+                                                onDelete={handleDelete}
+                                                onPreview={handlePreview}
                                                 isPlaying={playingId === profile.id}
                                                 isRenaming={renamingId === profile.id}
                                             />
                                         ))}
                                     </div>
                                 </SortableContext>
+                                <DragOverlay>
+                                    {activeId && profiles.find((p: VoiceProfile) => p.id === activeId) ? (
+                                        <VoiceItemOverlay
+                                            profile={profiles.find((p: VoiceProfile) => p.id === activeId)!}
+                                        />
+                                    ) : null}
+                                </DragOverlay>
                             </DndContext>
                         ) : (
                             <div className="text-center py-8 text-muted-foreground">
