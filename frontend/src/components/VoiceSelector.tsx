@@ -85,6 +85,9 @@ function VoiceRow({
     )
 }
 
+// Filter out Qwen3 voices - this selector is only for Kokoro
+const KOKORO_VOICE_DATA = VOICE_DATA.filter((lang) => !lang.code.startsWith("qwen3"))
+
 export function VoiceSelector({ value, onValueChange }: VoiceSelectorProps) {
     const [open, setOpen] = useState(false)
 
@@ -95,7 +98,8 @@ export function VoiceSelector({ value, onValueChange }: VoiceSelectorProps) {
         return { lang, voice }
     }, [value])
 
-    const defaultTab = selectedVoiceInfo.lang?.code ?? VOICE_DATA[0].code
+    const defaultTab = selectedVoiceInfo.lang?.code ?? KOKORO_VOICE_DATA[0].code
+
 
     // Display text for trigger button
     const triggerText = useMemo(() => {
@@ -135,7 +139,7 @@ export function VoiceSelector({ value, onValueChange }: VoiceSelectorProps) {
                     {/* Language tabs */}
                     <div className="border-b border-border px-1 pt-1">
                         <TabsList className="w-full h-auto flex-nowrap justify-between bg-transparent p-0">
-                            {VOICE_DATA.map((lang) => (
+                            {KOKORO_VOICE_DATA.map((lang) => (
                                 <TabsTrigger
                                     key={lang.code}
                                     value={lang.code}
@@ -152,7 +156,7 @@ export function VoiceSelector({ value, onValueChange }: VoiceSelectorProps) {
                     </div>
 
                     {/* Voice lists per language */}
-                    {VOICE_DATA.map((lang) => (
+                    {KOKORO_VOICE_DATA.map((lang) => (
                         <TabsContent
                             key={lang.code}
                             value={lang.code}

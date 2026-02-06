@@ -108,13 +108,14 @@ export function SyncedTextView({
                 {alignmentData.map((word, index) => {
                     const isActive = index === currentWordIndex
 
-                    // Check if there's a line break after this word in the original text
+                    // Preserve whitespace between words from the original text
                     const nextWord = alignmentData[index + 1]
                     let separator = " "
                     if (nextWord) {
                         const textBetween = text.slice(word.charEnd, nextWord.charStart)
+                        // Use the original whitespace if it contains newlines
                         if (textBetween.includes("\n")) {
-                            separator = "\n"
+                            separator = textBetween
                         }
                     }
 

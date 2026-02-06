@@ -1,6 +1,7 @@
+import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { Loader2, Power, Circle, RefreshCw, Zap, Sparkles } from "lucide-react"
+import { Loader2, Power, Circle, RefreshCw, Zap, Sparkles, Mic, Palette, ChevronDown, Check } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
@@ -11,11 +12,21 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { VoiceSelector } from "./VoiceSelector"
 import { LLMModelSelector } from "./LLMModelSelector"
-import { CustomVoicesSection } from "./CustomVoicesSection"
+import { VoiceManagerDialog } from "./VoiceManagerDialog"
+import { CreateVoiceDialog } from "./CustomVoicesSection"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import type { VoiceProfile } from "@/types"
+
 
 interface SettingsSidebarProps {
     voice: string
@@ -163,6 +174,180 @@ function Qwen3ModelStatus() {
     )
 }
 
+// Built-in Qwen3 speakers with language flag
+const QWEN3_SPEAKERS = [
+    { id: "aiden", name: "Aiden", flag: "🌐" },
+    { id: "dylan", name: "Dylan", flag: "🌐" },
+    { id: "eric", name: "Eric", flag: "🌐" },
+    { id: "ryan", name: "Ryan", flag: "🌐" },
+    { id: "serena", name: "Serena", flag: "🌐" },
+    { id: "vivian", name: "Vivian", flag: "🇨🇳" },
+    { id: "uncle_fu", name: "Uncle Fu", flag: "🇨🇳" },
+    { id: "ono_anna", name: "Ono Anna", flag: "🇯🇵" },
+    { id: "sohee", name: "Sohee", flag: "🇰🇷" },
+]
+
+// Unified voice selector for Qwen3 (built-in + custom voices) with tabbed dropdown
+function Qwen3VoiceSelector({
+    voice,
+    onVoiceChange,
+    voiceProfileId,
+    onVoiceProfileChange,
+}: {
+    voice: string
+    onVoiceChange: (voice: string) => void
+    voiceProfileId: string | null
+    onVoiceProfileChange: (profileId: string | null) => void
+}) {
+    const [open, setOpen] = useState(false)
+
+    const { data: profiles } = useQuery({
+        queryKey: ["voice-profiles"],
+        queryFn: async () => {
+            const res = await axios.get("http://localhost:8000/api/voice-profiles")
+            return res.data.profiles as VoiceProfile[]
+        },
+    })
+
+    const handleSelectBuiltIn = (speakerId: string) => {
+        onVoiceProfileChange(null)
+        onVoiceChange(speakerId)
+        setOpen(false)
+    }
+
+    const handleSelectCustom = (profileId: string) => {
+        onVoiceProfileChange(profileId)
+        setOpen(false)
+    }
+
+    // Find display text for trigger
+    const getDisplayLabel = () => {
+        if (voiceProfileId) {
+            const profile = profiles?.find((p) => p.id === voiceProfileId)
+            if (profile) {
+                const icon = profile.source === "designed" ? "🎨" : "🎤"
+                return `${icon} ${profile.name}`
+            }
+            return "🎤 Custom Voice"
+        }
+        const speaker = QWEN3_SPEAKERS.find((s) => s.id === voice)
+        return speaker ? `${speaker.flag} ${speaker.name}` : voice
+    }
+
+    // Default to custom tab if a custom voice is selected
+    const defaultTab = voiceProfileId ? "custom" : "builtin"
+
+    return (
+        <DropdownMenu open={open} onOpenChange={setOpen}>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    className="w-full justify-between font-normal px-3"
+                >
+                    <span className="truncate">{getDisplayLabel()}</span>
+                    <ChevronDown className={cn(
+                        "h-4 w-4 shrink-0 opacity-50 transition-transform duration-200",
+                        open && "rotate-180"
+                    )} />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+                className="w-[var(--radix-dropdown-menu-trigger-width)] p-0"
+                align="start"
+                sideOffset={4}
+            >
+                <Tabs defaultValue={defaultTab} className="w-full">
+                    {/* Tab headers */}
+                    <div className="border-b border-border px-1 pt-1">
+                        <TabsList className="w-full h-auto grid grid-cols-2 bg-transparent p-0 gap-1">
+                            <TabsTrigger
+                                value="builtin"
+                                className="px-3 py-1.5 text-xs data-[state=active]:bg-accent hover:bg-accent/50 transition-colors"
+                            >
+                                Built-in Voices
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="custom"
+                                className="px-3 py-1.5 text-xs data-[state=active]:bg-accent hover:bg-accent/50 transition-colors"
+                            >
+                                Custom Voices
+                            </TabsTrigger>
+                        </TabsList>
+                    </div>
+
+                    {/* Built-in voices tab */}
+                    <TabsContent value="builtin" className="mt-0 focus-visible:ring-0">
+                        <ScrollArea className="h-[280px]">
+                            <div className="p-1 space-y-0.5">
+                                {QWEN3_SPEAKERS.map((speaker) => (
+                                    <button
+                                        key={speaker.id}
+                                        onClick={() => handleSelectBuiltIn(speaker.id)}
+                                        className={cn(
+                                            "w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-150",
+                                            "hover:bg-accent/50 focus:outline-none focus:bg-accent/50",
+                                            !voiceProfileId && voice === speaker.id && "bg-accent"
+                                        )}
+                                    >
+                                        <span className="text-sm">{speaker.flag}</span>
+                                        <span className="flex-1 text-left text-sm font-medium truncate">
+                                            {speaker.name}
+                                        </span>
+                                        {!voiceProfileId && voice === speaker.id && (
+                                            <Check className="w-4 h-4 text-primary shrink-0" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </ScrollArea>
+                    </TabsContent>
+
+                    {/* Custom voices tab */}
+                    <TabsContent value="custom" className="mt-0 focus-visible:ring-0">
+                        <ScrollArea className="h-[280px]">
+                            <div className="p-1 space-y-0.5">
+                                {profiles && profiles.length > 0 ? (
+                                    profiles.map((profile) => (
+                                        <button
+                                            key={profile.id}
+                                            onClick={() => handleSelectCustom(profile.id)}
+                                            className={cn(
+                                                "w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-150",
+                                                "hover:bg-accent/50 focus:outline-none focus:bg-accent/50",
+                                                voiceProfileId === profile.id && "bg-accent"
+                                            )}
+                                        >
+                                            {profile.source === "designed" ? (
+                                                <Palette className="h-4 w-4 text-purple-500 shrink-0" />
+                                            ) : (
+                                                <Mic className="h-4 w-4 text-blue-500 shrink-0" />
+                                            )}
+                                            <span className="flex-1 text-left text-sm font-medium truncate">
+                                                {profile.name}
+                                            </span>
+                                            {voiceProfileId === profile.id && (
+                                                <Check className="w-4 h-4 text-primary shrink-0" />
+                                            )}
+                                        </button>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-8 text-sm text-muted-foreground">
+                                        <p>No custom voices yet.</p>
+                                        <p className="text-xs mt-1">Use "Manage..." to create one.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </ScrollArea>
+                    </TabsContent>
+                </Tabs>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
+
+
 export function SettingsSidebar({
     voice,
     onVoiceChange,
@@ -180,6 +365,8 @@ export function SettingsSidebar({
     onChunkSizeChange,
 }: SettingsSidebarProps) {
     const queryClient = useQueryClient()
+    const [voiceManagerOpen, setVoiceManagerOpen] = useState(false)
+    const [createVoiceOpen, setCreateVoiceOpen] = useState(false)
 
     // LLM status
     const { data: modelStatus } = useQuery({
@@ -267,26 +454,23 @@ export function SettingsSidebar({
                             <Qwen3ModelStatus />
 
                             <div className="space-y-2">
-                                <Label>Speaker</Label>
-                                <Select
-                                    value={voice}
-                                    onValueChange={onVoiceChange}
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select speaker" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="aiden">Aiden (English)</SelectItem>
-                                        <SelectItem value="dylan">Dylan (English)</SelectItem>
-                                        <SelectItem value="eric">Eric (English)</SelectItem>
-                                        <SelectItem value="ryan">Ryan (English)</SelectItem>
-                                        <SelectItem value="serena">Serena (English)</SelectItem>
-                                        <SelectItem value="vivian">Vivian (Chinese)</SelectItem>
-                                        <SelectItem value="uncle_fu">Uncle Fu (Chinese)</SelectItem>
-                                        <SelectItem value="ono_anna">Ono Anna (Japanese)</SelectItem>
-                                        <SelectItem value="sohee">Sohee (Korean)</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <div className="flex items-center justify-between">
+                                    <Label>Voice</Label>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-2 text-xs"
+                                        onClick={() => setVoiceManagerOpen(true)}
+                                    >
+                                        Manage...
+                                    </Button>
+                                </div>
+                                <Qwen3VoiceSelector
+                                    voice={voice}
+                                    onVoiceChange={onVoiceChange}
+                                    voiceProfileId={voiceProfileId}
+                                    onVoiceProfileChange={onVoiceProfileChange}
+                                />
                             </div>
 
                             <div className="space-y-2">
@@ -299,14 +483,6 @@ export function SettingsSidebar({
                                     value={instruct}
                                     onChange={(e) => onInstructChange(e.target.value)}
                                     className="h-20 resize-none text-sm"
-                                />
-                            </div>
-
-                            {/* Custom Voice Profiles for consistent cloning */}
-                            <div className="border-t border-border pt-4">
-                                <CustomVoicesSection
-                                    selectedProfileId={voiceProfileId}
-                                    onProfileSelect={onVoiceProfileChange}
                                 />
                             </div>
                         </>
@@ -418,6 +594,21 @@ export function SettingsSidebar({
                     </div>
                 </div>
             </div>
+
+            {/* Voice Manager Dialog */}
+            <VoiceManagerDialog
+                open={voiceManagerOpen}
+                onOpenChange={setVoiceManagerOpen}
+                selectedProfileId={voiceProfileId}
+                onProfileSelect={onVoiceProfileChange}
+                onCreateVoice={() => setCreateVoiceOpen(true)}
+            />
+
+            {/* Create Voice Dialog */}
+            <CreateVoiceDialog
+                open={createVoiceOpen}
+                onOpenChange={setCreateVoiceOpen}
+            />
         </div>
     )
 }

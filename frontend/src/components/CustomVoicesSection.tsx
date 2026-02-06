@@ -141,7 +141,7 @@ interface CreateVoiceDialogProps {
     onOpenChange: (open: boolean) => void
 }
 
-function CreateVoiceDialog({ open, onOpenChange }: CreateVoiceDialogProps) {
+export function CreateVoiceDialog({ open, onOpenChange }: CreateVoiceDialogProps) {
     const queryClient = useQueryClient()
     const [tab, setTab] = useState<"design" | "upload">("design")
 
