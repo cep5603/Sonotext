@@ -85,6 +85,24 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
         setLang(null)
     }, [engine])
 
+    // Update page title with progress percentage during generation
+    useEffect(() => {
+        if (isGenerating) {
+            document.title = `${progress}% - Sonotext`
+        } else {
+            document.title = "Sonotext"
+        }
+    }, [isGenerating, progress])
+
+    // Update page title with progress percentage during cleanup
+    useEffect(() => {
+        if (isCleaning) {
+            document.title = `${cleanupProgress}% - Sonotext`
+        } else {
+            document.title = "Sonotext"
+        }
+    }, [isCleaning, cleanupProgress])
+
     const handleGenerate = useCallback(async () => {
         setIsGenerating(true)
         setProgress(0)
