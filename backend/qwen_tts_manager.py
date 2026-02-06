@@ -16,6 +16,13 @@ from typing import Optional
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Qwen3TTSManager")
 
+# Suppress repetitive warnings from qwen_tts and transformers libraries
+logging.getLogger("qwen_tts.core.models.configuration_qwen3_tts").setLevel(logging.ERROR)
+logging.getLogger("qwen_tts").setLevel(logging.WARNING)
+# Suppress transformers "Setting pad_token_id to eos_token_id" warning
+import transformers
+transformers.logging.set_verbosity_error()
+
 # Available models by type and size
 QWEN3_MODELS = {
     # CustomVoice: Preset speakers with optional style instructions
