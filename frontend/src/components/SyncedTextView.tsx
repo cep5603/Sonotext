@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useMemo } from "react"
+import { useRef, useEffect, useCallback, useMemo, memo } from "react"
 import type { WordTiming } from "@/types"
 import { cn } from "@/lib/utils"
 
@@ -40,6 +40,43 @@ function findCurrentWordIndex(words: WordTiming[], time: number): number {
     return result
 }
 
+// Memoized word span — only re-renders when isActive or the word itself changes
+interface WordSpanProps {
+    word: WordTiming
+    separator: string
+    isLast: boolean
+    isActive: boolean
+    activeWordRef: React.RefObject<HTMLSpanElement | null>
+    onSeek: (time: number) => void
+}
+
+const WordSpan = memo(function WordSpan({
+    word,
+    separator,
+    isLast,
+    isActive,
+    activeWordRef,
+    onSeek,
+}: WordSpanProps) {
+    return (
+        <span>
+            <span
+                ref={isActive ? activeWordRef : null}
+                onClick={() => onSeek(word.start)}
+                className={cn(
+                    "synced-text-word cursor-pointer rounded px-0.5",
+                    "hover:bg-primary/10",
+                    isActive && "bg-primary/30"
+                )}
+            >
+                {word.word}
+            </span>
+            {/* Add appropriate separator (space or newline) */}
+            {!isLast && separator}
+        </span>
+    )
+})
+
 export function SyncedTextView({
     text,
     alignmentData,
@@ -51,6 +88,22 @@ export function SyncedTextView({
     const containerRef = useRef<HTMLDivElement>(null)
     const activeWordRef = useRef<HTMLSpanElement>(null)
     const lastScrolledIndex = useRef(-1)
+    const scrollThrottleRef = useRef(false)
+
+    // Pre-compute separators once when alignment data or text changes
+    const separators = useMemo(() => {
+        if (!alignmentData) return []
+        return alignmentData.map((word, index) => {
+            const nextWord = alignmentData[index + 1]
+            if (!nextWord) return ""
+            const textBetween = text.slice(word.charEnd, nextWord.charStart)
+            // Use the original whitespace if it contains newlines
+            if (textBetween.includes("\n")) {
+                return textBetween
+            }
+            return " "
+        })
+    }, [alignmentData, text])
 
     // Find the currently active word (only when playing)
     const currentWordIndex = useMemo(() => {
@@ -58,19 +111,26 @@ export function SyncedTextView({
         return findCurrentWordIndex(alignmentData, currentTime)
     }, [alignmentData, currentTime, isPlaying])
 
-    // Auto-scroll to keep the active word in view
+    // Auto-scroll to keep the active word in view (throttled)
     useEffect(() => {
         if (!autoScroll || !isPlaying) return
         if (currentWordIndex === lastScrolledIndex.current) return
         if (!activeWordRef.current) return
+        if (scrollThrottleRef.current) return
 
         lastScrolledIndex.current = currentWordIndex
+        scrollThrottleRef.current = true
 
         activeWordRef.current.scrollIntoView({
             behavior: "smooth",
             block: "center",
             inline: "nearest"
         })
+
+        // Throttle scroll to at most once per 300ms to avoid piling up animations
+        setTimeout(() => {
+            scrollThrottleRef.current = false
+        }, 300)
     }, [currentWordIndex, autoScroll, isPlaying])
 
     // Reset scroll tracking when audio restarts
@@ -80,8 +140,8 @@ export function SyncedTextView({
         }
     }, [currentTime])
 
-    const handleWordClick = useCallback((word: WordTiming) => {
-        onSeek(word.start)
+    const handleWordSeek = useCallback((time: number) => {
+        onSeek(time)
     }, [onSeek])
 
     // If no alignment data, render plain text (fallback)
@@ -105,38 +165,17 @@ export function SyncedTextView({
             className="flex-1 min-h-0 rounded-lg border bg-muted/30 overflow-y-auto p-4"
         >
             <p className="text-base leading-relaxed whitespace-pre-wrap">
-                {alignmentData.map((word, index) => {
-                    const isActive = index === currentWordIndex
-
-                    // Preserve whitespace between words from the original text
-                    const nextWord = alignmentData[index + 1]
-                    let separator = " "
-                    if (nextWord) {
-                        const textBetween = text.slice(word.charEnd, nextWord.charStart)
-                        // Use the original whitespace if it contains newlines
-                        if (textBetween.includes("\n")) {
-                            separator = textBetween
-                        }
-                    }
-
-                    return (
-                        <span key={`${word.charStart}-${index}`}>
-                            <span
-                                ref={isActive ? activeWordRef : null}
-                                onClick={() => handleWordClick(word)}
-                                className={cn(
-                                    "synced-text-word cursor-pointer rounded px-0.5",
-                                    "hover:bg-primary/10",
-                                    isActive && "bg-primary/30"
-                                )}
-                            >
-                                {word.word}
-                            </span>
-                            {/* Add appropriate separator (space or newline) */}
-                            {index < alignmentData.length - 1 && separator}
-                        </span>
-                    )
-                })}
+                {alignmentData.map((word, index) => (
+                    <WordSpan
+                        key={`${word.charStart}-${index}`}
+                        word={word}
+                        separator={separators[index]}
+                        isLast={index === alignmentData.length - 1}
+                        isActive={index === currentWordIndex}
+                        activeWordRef={activeWordRef}
+                        onSeek={handleWordSeek}
+                    />
+                ))}
             </p>
         </div>
     )

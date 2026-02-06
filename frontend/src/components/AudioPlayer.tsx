@@ -39,6 +39,10 @@ export function AudioPlayer({
     const autoplayRef = useRef(autoplay)
     const onPlayStartedRef = useRef(onPlayStarted)
     const currentLoadedUrl = useRef<string | null>(null)
+    // Refs for direct callback invocation (avoids useEffect intermediary)
+    const onTimeUpdateRef = useRef(onTimeUpdate)
+    const onPlayingChangeRef = useRef(onPlayingChange)
+    const rafIdRef = useRef<number | null>(null)
 
     // Keep callback refs in sync
     useEffect(() => {
@@ -48,6 +52,14 @@ export function AudioPlayer({
     useEffect(() => {
         onPlayStartedRef.current = onPlayStarted
     }, [onPlayStarted])
+
+    useEffect(() => {
+        onTimeUpdateRef.current = onTimeUpdate
+    }, [onTimeUpdate])
+
+    useEffect(() => {
+        onPlayingChangeRef.current = onPlayingChange
+    }, [onPlayingChange])
 
     // Main effect: Initialize WaveSurfer and load audio when audioUrl changes
     useEffect(() => {
@@ -84,9 +96,36 @@ export function AudioPlayer({
 
         wavesurferRef.current = ws
 
-        ws.on('play', () => setIsPlaying(true))
-        ws.on('pause', () => setIsPlaying(false))
-        ws.on('finish', () => setIsPlaying(false))
+        ws.on('play', () => {
+            setIsPlaying(true)
+            onPlayingChangeRef.current?.(true)
+            // Start rAF polling for smooth time updates
+            const poll = () => {
+                if (wavesurferRef.current) {
+                    const t = wavesurferRef.current.getCurrentTime()
+                    setCurrentTime(t)
+                    onTimeUpdateRef.current?.(t)
+                }
+                rafIdRef.current = requestAnimationFrame(poll)
+            }
+            rafIdRef.current = requestAnimationFrame(poll)
+        })
+        ws.on('pause', () => {
+            setIsPlaying(false)
+            onPlayingChangeRef.current?.(false)
+            if (rafIdRef.current !== null) {
+                cancelAnimationFrame(rafIdRef.current)
+                rafIdRef.current = null
+            }
+        })
+        ws.on('finish', () => {
+            setIsPlaying(false)
+            onPlayingChangeRef.current?.(false)
+            if (rafIdRef.current !== null) {
+                cancelAnimationFrame(rafIdRef.current)
+                rafIdRef.current = null
+            }
+        })
         ws.on('error', (e) => {
             // Ignore abort errors - they're expected when component unmounts during load
             if (e instanceof Error && e.name === 'AbortError') {
@@ -106,12 +145,10 @@ export function AudioPlayer({
             }
         })
 
-        ws.on('audioprocess', () => {
-            setCurrentTime(ws.getCurrentTime())
-        })
-
         ws.on('seeking', () => {
-            setCurrentTime(ws.getCurrentTime())
+            const t = ws.getCurrentTime()
+            setCurrentTime(t)
+            onTimeUpdateRef.current?.(t)
         })
 
         // Load the audio - catch AbortError which happens when component unmounts during load
@@ -122,6 +159,10 @@ export function AudioPlayer({
 
         // Cleanup on unmount or URL change
         return () => {
+            if (rafIdRef.current !== null) {
+                cancelAnimationFrame(rafIdRef.current)
+                rafIdRef.current = null
+            }
             ws.destroy()
             wavesurferRef.current = null
         }
@@ -135,15 +176,6 @@ export function AudioPlayer({
         }
     }, [autoplay, isReady, isPlaying, onPlayStarted])
 
-    // Notify parent of time updates
-    useEffect(() => {
-        onTimeUpdate?.(currentTime)
-    }, [currentTime, onTimeUpdate])
-
-    // Notify parent of playing state changes
-    useEffect(() => {
-        onPlayingChange?.(isPlaying)
-    }, [isPlaying, onPlayingChange])
 
     // Handle external seek requests
     useEffect(() => {
