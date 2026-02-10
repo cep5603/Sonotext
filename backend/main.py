@@ -20,6 +20,7 @@ from qwen_tts_manager import qwen3_manager
 from voice_profiles import voice_profile_manager, DEFAULT_REFERENCE_TEXT
 from pdf_processor import extract_text_from_pdf
 from history_manager import history_manager
+from project_manager import project_manager
 import llm_service
 import alignment_service
 
@@ -777,6 +778,111 @@ async def cleanup_text(req: CleanupRequest):
             }
     
     return EventSourceResponse(event_generator())
+
+# Project endpoints
+
+class CreateProjectRequest(BaseModel):
+    name: str
+
+class RenameProjectRequest(BaseModel):
+    name: str
+
+class AddGenerationRequest(BaseModel):
+    generation_id: str
+
+
+def _resolve_project(project: dict) -> dict:
+    """Attach resolved generation objects from history to a project."""
+    history = history_manager.get_history()
+    history_map = {item["id"]: item for item in history}
+    resolved = [history_map[gid] for gid in project["generation_ids"] if gid in history_map]
+    return {**project, "generations": resolved}
+
+
+@app.get("/api/projects")
+def list_projects():
+    """List all projects with generation counts."""
+    projects = project_manager.list_projects()
+    return [_resolve_project(p) for p in projects]
+
+
+@app.post("/api/projects")
+def create_project(req: CreateProjectRequest):
+    """Create a new project."""
+    if not req.name or not req.name.strip():
+        raise HTTPException(status_code=400, detail="Name cannot be empty")
+    return _resolve_project(project_manager.create_project(req.name))
+
+
+@app.get("/api/projects/{project_id}")
+def get_project(project_id: str):
+    """Get a single project with resolved generations."""
+    project = project_manager.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return _resolve_project(project)
+
+
+@app.patch("/api/projects/{project_id}")
+def rename_project(project_id: str, req: RenameProjectRequest):
+    """Rename a project."""
+    if not req.name or not req.name.strip():
+        raise HTTPException(status_code=400, detail="Name cannot be empty")
+    result = project_manager.rename_project(project_id, req.name)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return _resolve_project(result)
+
+
+@app.delete("/api/projects/{project_id}")
+def delete_project(project_id: str):
+    """Delete a project (does not delete generations)."""
+    if not project_manager.delete_project(project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"status": "deleted"}
+
+
+class ReorderProjectsRequest(BaseModel):
+    ordered_ids: list[str]
+
+
+@app.put("/api/projects/reorder")
+def reorder_projects(req: ReorderProjectsRequest):
+    """Reorder projects to match the given ID order."""
+    result = project_manager.reorder_projects(req.ordered_ids)
+    return [_resolve_project(p) for p in result]
+
+
+@app.post("/api/projects/{project_id}/generations")
+def add_generation_to_project(project_id: str, req: AddGenerationRequest):
+    """Add a generation to a project."""
+    result = project_manager.add_generation(project_id, req.generation_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return _resolve_project(result)
+
+
+@app.delete("/api/projects/{project_id}/generations/{generation_id}")
+def remove_generation_from_project(project_id: str, generation_id: str):
+    """Remove a generation from a project."""
+    result = project_manager.remove_generation(project_id, generation_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return _resolve_project(result)
+
+
+class ReorderGenerationsRequest(BaseModel):
+    ordered_ids: list[str]
+
+
+@app.put("/api/projects/{project_id}/generations/reorder")
+def reorder_project_generations(project_id: str, req: ReorderGenerationsRequest):
+    """Reorder generations within a project."""
+    result = project_manager.reorder_generations(project_id, req.ordered_ids)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return _resolve_project(result)
+
 
 @app.post("/api/parse-pdf")
 async def parse_pdf(file: UploadFile = File(...)):

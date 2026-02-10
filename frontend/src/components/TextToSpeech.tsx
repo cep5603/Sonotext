@@ -12,13 +12,17 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core"
+import { arrayMove } from "@dnd-kit/sortable"
 import { AudioPlayer } from "./AudioPlayer"
 import { SyncedTextView } from "./SyncedTextView"
 import { HistorySidebar } from "./HistorySidebar"
 import { SettingsSidebar } from "./SettingsSidebar"
-import type { HistoryItem, WordTiming } from "@/types"
+import { ProjectsPanel } from "./ProjectsPanel"
+import { ProjectDetailView } from "./ProjectDetailView"
+import type { HistoryItem, WordTiming, Project } from "@/types"
 import { cn } from "@/lib/utils"
-import { getVoiceInfo, getVoiceLanguage } from "@/lib/voiceData"
+import { formatVoiceDisplay } from "@/lib/voiceData"
 
 function formatDuration(seconds?: number): string {
     if (!seconds) return "--:--"
@@ -27,14 +31,6 @@ function formatDuration(seconds?: number): string {
     return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-function formatVoiceDisplay(voiceId: string): string {
-    const voice = getVoiceInfo(voiceId)
-    const lang = getVoiceLanguage(voiceId)
-    if (voice && lang) {
-        return `${lang.flag} ${voice.name}`
-    }
-    return voiceId
-}
 
 interface TextToSpeechProps {
     selectedItem: HistoryItem | null
@@ -73,6 +69,139 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
     const [autoScroll, setAutoScroll] = useState(true)
     const [copied, setCopied] = useState(false)
     const queryClient = useQueryClient()
+
+    // View state
+    type ViewMode = "generator" | "detail" | "projects" | "projectDetail"
+    const [viewMode, setViewMode] = useState<ViewMode>(selectedItem ? "detail" : "generator")
+    const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
+    const [activeProjectName, setActiveProjectName] = useState<string | null>(null)
+    const [sourceProjectId, setSourceProjectId] = useState<string | null>(null) // which project the detail view came from
+    const [activeDragId, setActiveDragId] = useState<string | null>(null)
+
+    // Sync viewMode when selectedItem changes externally (e.g. from sidebar click)
+    useEffect(() => {
+        if (selectedItem && viewMode !== "detail") {
+            setViewMode("detail")
+            // If clicking from sidebar (not from a project), clear source project
+            if (viewMode !== "projectDetail") {
+                setSourceProjectId(null)
+            }
+        }
+    }, [selectedItem])
+
+    // DnD sensors
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    )
+
+    const handleDragStart = (event: DragStartEvent) => {
+        setActiveDragId(event.active.id as string)
+    }
+
+    const handleDragEnd = async (event: DragEndEvent) => {
+        setActiveDragId(null)
+        const { active, over } = event
+        if (!over) return
+
+        const activeData = active.data.current as { type?: string } | undefined
+        const overData = over.data.current as { type?: string; projectId?: string } | undefined
+
+        // Case 1: Generation dropped on a project tile
+        if (activeData?.type === "generation" && overData?.type === "project" && overData.projectId) {
+            try {
+                await axios.post(`http://localhost:8000/api/projects/${overData.projectId}/generations`, {
+                    generation_id: active.id,
+                })
+                queryClient.invalidateQueries({ queryKey: ["projects"] })
+                queryClient.invalidateQueries({ queryKey: ["projects", overData.projectId] })
+            } catch (e) {
+                console.error("Failed to add generation to project:", e)
+            }
+            return
+        }
+
+        // Case 2: Project tile reordered
+        if (activeData?.type === "project" && overData?.type === "project" && active.id !== over.id) {
+            // Get current project list from query cache
+            const projects = queryClient.getQueryData<{ id: string }[]>(["projects"]) || []
+            const activeId = (active.id as string).replace("project-", "")
+            const overId = (over.id as string).replace("project-", "")
+            const oldIndex = projects.findIndex((p) => p.id === activeId)
+            const newIndex = projects.findIndex((p) => p.id === overId)
+            if (oldIndex !== -1 && newIndex !== -1) {
+                const reordered = arrayMove(projects, oldIndex, newIndex)
+                // Optimistic update
+                queryClient.setQueryData(["projects"], reordered)
+                // Persist to backend
+                try {
+                    await axios.put("http://localhost:8000/api/projects/reorder", {
+                        ordered_ids: reordered.map((p) => p.id),
+                    })
+                } catch (e) {
+                    console.error("Failed to reorder projects:", e)
+                    queryClient.invalidateQueries({ queryKey: ["projects"] })
+                }
+            }
+            return
+        }
+
+        // Case 3: Generation reordered within a project
+        if (activeData?.type === "project-generation" && overData?.type === "project-generation" && active.id !== over.id) {
+            const activeGenData = active.data.current as { projectId?: string }
+            const pid = activeGenData?.projectId
+            if (pid) {
+                const project = queryClient.getQueryData<{ generations: { id: string }[] }>(["projects", pid])
+                if (project) {
+                    const gens = project.generations
+                    const activeGenId = (active.id as string).replace("project-gen-", "")
+                    const overGenId = (over.id as string).replace("project-gen-", "")
+                    const oldIndex = gens.findIndex((g) => g.id === activeGenId)
+                    const newIndex = gens.findIndex((g) => g.id === overGenId)
+                    if (oldIndex !== -1 && newIndex !== -1) {
+                        const reordered = arrayMove(gens, oldIndex, newIndex)
+                        // Optimistic update
+                        queryClient.setQueryData(["projects", pid], { ...project, generations: reordered })
+                        try {
+                            await axios.put(`http://localhost:8000/api/projects/${pid}/generations/reorder`, {
+                                ordered_ids: reordered.map((g) => g.id),
+                            })
+                        } catch (e) {
+                            console.error("Failed to reorder generations:", e)
+                            queryClient.invalidateQueries({ queryKey: ["projects", pid] })
+                        }
+                    }
+                }
+            }
+            return
+        }
+    }
+
+    // Navigation helpers
+    const goToProjects = () => {
+        onSelectedItemChange(null)
+        setActiveProjectId(null)
+        setActiveProjectName(null)
+        setSourceProjectId(null)
+        setViewMode("projects")
+    }
+
+    const goToProjectDetail = (project: Project) => {
+        onSelectedItemChange(null)
+        setActiveProjectId(project.id)
+        setActiveProjectName(project.name)
+        setSourceProjectId(null)
+        setViewMode("projectDetail")
+    }
+
+    const goToGenerator = () => {
+        onSelectedItemChange(null)
+        setActiveProjectId(null)
+        setActiveProjectName(null)
+        setSourceProjectId(null)
+        setViewMode("generator")
+        setAlignmentData(null)
+        setSeekToTime(null)
+    }
 
     // Switch to appropriate default voice when engine changes
     useEffect(() => {
@@ -309,10 +438,11 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
         setSeekToTime(null)
     }
 
-    const handleBackToGenerator = () => {
-        onSelectedItemChange(null)
-        setAlignmentData(null)
-        setSeekToTime(null)
+
+    // Handle selecting a generation from project detail view
+    const handleSelectFromProject = (item: HistoryItem, autoplay: boolean = false) => {
+        setSourceProjectId(activeProjectId)
+        handleSelectItem(item, autoplay)
     }
 
     // Fetch alignment data when a history item is selected
@@ -360,257 +490,352 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                 chunkSize={chunkSize}
                 onChunkSizeChange={setChunkSize}
             />
-            <div className="flex-1 min-w-0 min-h-0 h-full px-8 py-4">
-                <Card className="border-none shadow-2xl bg-card/80 backdrop-blur-xl h-full flex flex-col max-w-4xl mx-auto">
-                    <CardContent className="p-8 space-y-6 flex-1 flex flex-col overflow-hidden">
+            <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+                <div className="flex-1 min-w-0 min-h-0 h-full px-8 py-4">
+                    <Card className="border-none shadow-2xl bg-card/80 backdrop-blur-xl h-full flex flex-col max-w-4xl mx-auto">
+                        <CardContent className="p-8 space-y-6 flex-1 flex flex-col overflow-hidden">
 
-                        {/* Detail View - shows when a history item is selected */}
-                        {selectedItem ? (
-                            <div className="flex-1 flex flex-col space-y-4 animate-in fade-in duration-200 min-h-0">
-                                <div className="flex items-center gap-4">
-                                    <Button variant="ghost" size="sm" onClick={handleBackToGenerator}>
-                                        <ArrowLeft className="mr-2 h-4 w-4" />
-                                        Back to Generator
-                                    </Button>
-                                </div>
+                            {/* Breadcrumb Navigation */}
+                            <nav className="flex items-center gap-2 text-lg flex-wrap">
+                                {/* Generator - always shown */}
+                                {viewMode === "generator" ? (
+                                    <>
+                                        <span className="text-foreground font-medium">Generator</span>
+                                        <span className="text-muted-foreground/50">/</span>
+                                        <button
+                                            onClick={goToProjects}
+                                            className="text-muted-foreground hover:text-foreground transition-colors"
+                                        >
+                                            Projects
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button
+                                        onClick={goToGenerator}
+                                        className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                    >
+                                        <ArrowLeft className="h-3.5 w-3.5" />
+                                        Generator
+                                    </button>
+                                )}
 
-                                {/* Filename title */}
-                                <h2 className="text-xl font-semibold tracking-tight">
-                                    {selectedItem.filename
-                                        .split('/').pop()?.replace(/\.wav$/, '').replace(/-[a-f0-9]{8}$/, '').replace(/-/g, ' ')
-                                        || 'Untitled'}
-                                </h2>
-
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                        <span className="font-medium text-foreground">{formatVoiceDisplay(selectedItem.voice)}</span>
-                                        {selectedItem.model && (
-                                            <>
-                                                <span>•</span>
-                                                <span>{selectedItem.model}</span>
-                                            </>
+                                {/* Projects */}
+                                {(viewMode === "projects" || viewMode === "projectDetail" || (viewMode === "detail" && sourceProjectId)) && (
+                                    <>
+                                        <span className="text-muted-foreground/50">/</span>
+                                        {viewMode === "projects" ? (
+                                            <span className="text-foreground font-medium">Projects</span>
+                                        ) : (
+                                            <button
+                                                onClick={goToProjects}
+                                                className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                            >
+                                                <ArrowLeft className="h-3.5 w-3.5" />
+                                                Projects
+                                            </button>
                                         )}
-                                        <span>•</span>
-                                        <span>{selectedItem.speed}x</span>
-                                        <span>•</span>
-                                        <span className="flex items-center gap-1">
-                                            <Clock className="h-3 w-3" />
-                                            {formatDuration(selectedItem.duration)}
+                                    </>
+                                )}
+
+                                {/* Project Name */}
+                                {(viewMode === "projectDetail" || (viewMode === "detail" && sourceProjectId)) && activeProjectName && (
+                                    <>
+                                        <span className="text-muted-foreground/50">/</span>
+                                        {viewMode === "projectDetail" ? (
+                                            <span className="text-foreground font-medium">{activeProjectName}</span>
+                                        ) : (
+                                            <button
+                                                onClick={() => {
+                                                    if (sourceProjectId) {
+                                                        onSelectedItemChange(null)
+                                                        setActiveProjectId(sourceProjectId)
+                                                        setViewMode("projectDetail")
+                                                        setSourceProjectId(null)
+                                                    }
+                                                }}
+                                                className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                            >
+                                                <ArrowLeft className="h-3.5 w-3.5" />
+                                                {activeProjectName}
+                                            </button>
+                                        )}
+                                    </>
+                                )}
+
+                                {/* Current detail item name */}
+                                {viewMode === "detail" && selectedItem && (
+                                    <>
+                                        <span className="text-muted-foreground/50">/</span>
+                                        <span className="text-foreground font-medium truncate max-w-[400px]">
+                                            {selectedItem.filename
+                                                .split('/').pop()?.replace(/\.wav$/, '').replace(/-[a-f0-9]{8}$/, '').replace(/-/g, ' ')
+                                                || 'Untitled'}
                                         </span>
-                                        <span>•</span>
-                                        <span>{new Date(selectedItem.timestamp * 1000).toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={async () => {
-                                                await navigator.clipboard.writeText(selectedItem.text)
-                                                setCopied(true)
-                                                setTimeout(() => setCopied(false), 1500)
-                                            }}
-                                            className="gap-2 text-xs"
-                                        >
-                                            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                                            {copied ? "Copied!" : "Copy"}
-                                        </Button>
-                                        <Button
-                                            variant={autoScroll ? "secondary" : "ghost"}
-                                            size="sm"
-                                            onClick={() => setAutoScroll(!autoScroll)}
-                                            className="gap-2 text-xs"
-                                        >
-                                            <ArrowDownUp className="h-3 w-3" />
-                                            Auto-scroll {autoScroll ? "On" : "Off"}
-                                        </Button>
-                                    </div>
-                                </div>
+                                    </>
+                                )}
+                            </nav>
 
-                                <SyncedTextView
-                                    text={selectedItem.text}
-                                    alignmentData={alignmentData}
-                                    currentTime={audioCurrentTime}
-                                    onSeek={handleSeek}
-                                    isPlaying={isAudioPlaying}
-                                    autoScroll={autoScroll}
-                                />
+                            {/* Detail View - shows when a history item is selected */}
+                            {viewMode === "detail" && selectedItem ? (
+                                <div className="flex-1 flex flex-col space-y-4 animate-in fade-in duration-200 min-h-0">
 
-                                <AudioPlayer
-                                    audioUrl={selectedItem.url.startsWith('http') ? selectedItem.url : `http://localhost:8000${selectedItem.url}`}
-                                    filename={selectedItem.filename}
-                                    autoplay={shouldAutoplay}
-                                    onPlayStarted={() => setShouldAutoplay(false)}
-                                    onTimeUpdate={setAudioCurrentTime}
-                                    onPlayingChange={setIsAudioPlaying}
-                                    seekToTime={seekToTime}
-                                />
-                            </div>
-                        ) : (
-                            /* Generator View - normal text input and controls */
-                            <>
-                                <div
-                                    className={cn(
-                                        "relative rounded-xl border-2 border-dashed transition-all duration-300 ease-in-out p-1 flex-1 min-h-0 flex flex-col",
-                                        isDragging ? "border-primary bg-primary/10 scale-[1.01]" : "border-muted-foreground/20 hover:border-primary/50"
-                                    )}
-                                    onDragOver={handleDragOver}
-                                    onDragLeave={handleDragLeave}
-                                    onDrop={handleDrop}
-                                >
-                                    <Textarea
-                                        placeholder="Paste text here or drag & drop a PDF..."
-                                        className="flex-1 min-h-0 resize-none text-lg p-6 bg-transparent border-none focus-visible:ring-0"
-                                        value={text}
-                                        onChange={(e) => setText(e.target.value)}
+                                    {/* Filename title */}
+                                    <h2 className="text-xl font-semibold tracking-tight">
+                                        {selectedItem.filename
+                                            .split('/').pop()?.replace(/\.wav$/, '').replace(/-[a-f0-9]{8}$/, '').replace(/-/g, ' ')
+                                            || 'Untitled'}
+                                    </h2>
+
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                            <span className="font-medium text-foreground">{formatVoiceDisplay(selectedItem.voice, selectedItem.voice_profile_id)}</span>
+                                            {selectedItem.model && (
+                                                <>
+                                                    <span>•</span>
+                                                    <span>{selectedItem.model}</span>
+                                                </>
+                                            )}
+                                            <span>•</span>
+                                            <span>{selectedItem.speed}x</span>
+                                            <span>•</span>
+                                            <span className="flex items-center gap-1">
+                                                <Clock className="h-3 w-3" />
+                                                {formatDuration(selectedItem.duration)}
+                                            </span>
+                                            <span>•</span>
+                                            <span>{new Date(selectedItem.timestamp * 1000).toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={async () => {
+                                                    await navigator.clipboard.writeText(selectedItem.text)
+                                                    setCopied(true)
+                                                    setTimeout(() => setCopied(false), 1500)
+                                                }}
+                                                className="gap-2 text-xs"
+                                            >
+                                                {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                                {copied ? "Copied!" : "Copy"}
+                                            </Button>
+                                            <Button
+                                                variant={autoScroll ? "secondary" : "ghost"}
+                                                size="sm"
+                                                onClick={() => setAutoScroll(!autoScroll)}
+                                                className="gap-2 text-xs"
+                                            >
+                                                <ArrowDownUp className="h-3 w-3" />
+                                                Auto-scroll {autoScroll ? "On" : "Off"}
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    <SyncedTextView
+                                        text={selectedItem.text}
+                                        alignmentData={alignmentData}
+                                        currentTime={audioCurrentTime}
+                                        onSeek={handleSeek}
+                                        isPlaying={isAudioPlaying}
+                                        autoScroll={autoScroll}
                                     />
 
-                                    {isDragging && (
-                                        <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
-                                            <div className="text-center space-y-2 animate-bounce">
-                                                <UploadCloud className="h-10 w-10 mx-auto text-primary" />
-                                                <p className="text-lg font-medium text-primary">Drop PDF to extract text</p>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {!text && !isDragging && (
-                                        <div className="absolute bottom-4 right-4 text-xs text-muted-foreground flex items-center gap-2">
-                                            <FileText className="h-3 w-3" />
-                                            <span>Drag PDF or</span>
-                                            <label className="cursor-pointer hover:text-primary underline">
-                                                browse
-                                                <input type="file" accept=".pdf" className="hidden" onChange={handleFileSelect} />
-                                            </label>
-                                        </div>
-                                    )}
+                                    <AudioPlayer
+                                        audioUrl={selectedItem.url.startsWith('http') ? selectedItem.url : `http://localhost:8000${selectedItem.url}`}
+                                        filename={selectedItem.filename}
+                                        autoplay={shouldAutoplay}
+                                        onPlayStarted={() => setShouldAutoplay(false)}
+                                        onTimeUpdate={setAudioCurrentTime}
+                                        onPlayingChange={setIsAudioPlaying}
+                                        seekToTime={seekToTime}
+                                    />
                                 </div>
 
-                                {/* Cleanup Progress Bar */}
-                                {(isCleaning || cleanupStats) && (
-                                    <div className="space-y-2 animate-in fade-in duration-300 flex-shrink-0">
-                                        <div className="flex justify-between text-sm text-muted-foreground">
-                                            <span>{cleanupProgressText}</span>
-                                            <span>{cleanupProgress}%</span>
-                                        </div>
-                                        <Progress value={cleanupProgress} className="h-2" />
-                                        {cleanupStats && !isCleaning && (
-                                            <div className="text-xs text-muted-foreground text-right">
-                                                {cleanupStats.totalSeconds.toFixed(2)}s total • {cleanupStats.avgPerChunk.toFixed(2)}s/chunk
+                            ) : viewMode === "projects" ? (
+                                /* Projects Grid View */
+                                <ProjectsPanel onOpenProject={goToProjectDetail} />
+
+                            ) : viewMode === "projectDetail" && activeProjectId ? (
+                                /* Project Detail View */
+                                <ProjectDetailView
+                                    projectId={activeProjectId}
+                                    onSelectGeneration={handleSelectFromProject}
+                                />
+
+                            ) : (
+                                /* Generator View - normal text input and controls */
+                                <>
+                                    <div
+                                        className={cn(
+                                            "relative rounded-xl border-2 border-dashed transition-all duration-300 ease-in-out p-1 flex-1 min-h-0 flex flex-col",
+                                            isDragging ? "border-primary bg-primary/10 scale-[1.01]" : "border-muted-foreground/20 hover:border-primary/50"
+                                        )}
+                                        onDragOver={handleDragOver}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={handleDrop}
+                                    >
+                                        <Textarea
+                                            placeholder="Paste text here or drag & drop a PDF..."
+                                            className="flex-1 min-h-0 resize-none text-lg p-6 bg-transparent border-none focus-visible:ring-0"
+                                            value={text}
+                                            onChange={(e) => setText(e.target.value)}
+                                        />
+
+                                        {isDragging && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
+                                                <div className="text-center space-y-2 animate-bounce">
+                                                    <UploadCloud className="h-10 w-10 mx-auto text-primary" />
+                                                    <p className="text-lg font-medium text-primary">Drop PDF to extract text</p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {!text && !isDragging && (
+                                            <div className="absolute bottom-4 right-4 text-xs text-muted-foreground flex items-center gap-2">
+                                                <FileText className="h-3 w-3" />
+                                                <span>Drag PDF or</span>
+                                                <label className="cursor-pointer hover:text-primary underline">
+                                                    browse
+                                                    <input type="file" accept=".pdf" className="hidden" onChange={handleFileSelect} />
+                                                </label>
                                             </div>
                                         )}
                                     </div>
-                                )}
 
-                                <div className="flex justify-end gap-3 flex-shrink-0">
-                                    <div className="flex">
-                                        <Button
-                                            variant="secondary"
-                                            size="lg"
-                                            className="h-12 text-lg rounded-r-none"
-                                            onClick={() => setText(text.replace(/[*#]/g, ''))}
-                                            disabled={!text || isCleaning || isGenerating}
-                                        >
-                                            {isCleaning ? (
-                                                <>
-                                                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                                                    Cleaning...
-                                                </>
-                                            ) : (
-                                                "Clean Text"
-                                            )}
-                                        </Button>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button
-                                                    variant="secondary"
-                                                    size="lg"
-                                                    className="h-12 px-2 rounded-l-none border-l border-secondary-foreground/20"
-                                                    disabled={!text || isCleaning || isGenerating}
-                                                >
-                                                    <ChevronDown className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={handleCleanText}>
-                                                    <Sparkles className="mr-2 h-4 w-4" />
-                                                    LLM Clean
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </div>
-                                    <div className="flex">
-                                        <Button
-                                            size="lg"
-                                            className="min-w-[160px] text-lg h-12 rounded-r-none"
-                                            onClick={handleGenerate}
-                                            disabled={!text || isGenerating || isCleaning}
-                                        >
-                                            {isGenerating ? (
-                                                <>
-                                                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                                                    Synthesizing...
-                                                </>
-                                            ) : (
-                                                "Generate Audio"
-                                            )}
-                                        </Button>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button
-                                                    size="lg"
-                                                    className="h-12 px-2 rounded-l-none border-l border-primary-foreground/20"
-                                                    disabled={!text || isGenerating || isCleaning}
-                                                >
-                                                    <ChevronDown className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={handleCleanAndGenerate}>
-                                                    <Sparkles className="mr-2 h-4 w-4" />
-                                                    LLM Clean & Generate
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </div>
-                                </div>
-
-                                {/* Progress Bar */}
-                                {(isGenerating || generationStats) && (
-                                    <div className="space-y-2 animate-in fade-in duration-300 flex-shrink-0">
-                                        <div className="flex justify-between text-sm text-muted-foreground">
-                                            <span>{progressText}</span>
-                                            <span>{progress}%</span>
-                                        </div>
-                                        <Progress value={progress} className="h-2" />
-                                        {generationStats && !isGenerating && (
-                                            <div className="text-xs text-muted-foreground text-right">
-                                                {generationStats.totalSeconds.toFixed(2)}s total • {generationStats.avgPerChunk.toFixed(2)}s/chunk
+                                    {/* Cleanup Progress Bar */}
+                                    {(isCleaning || cleanupStats) && (
+                                        <div className="space-y-2 animate-in fade-in duration-300 flex-shrink-0">
+                                            <div className="flex justify-between text-sm text-muted-foreground">
+                                                <span>{cleanupProgressText}</span>
+                                                <span>{cleanupProgress}%</span>
                                             </div>
-                                        )}
+                                            <Progress value={cleanupProgress} className="h-2" />
+                                            {cleanupStats && !isCleaning && (
+                                                <div className="text-xs text-muted-foreground text-right">
+                                                    {cleanupStats.totalSeconds.toFixed(2)}s total • {cleanupStats.avgPerChunk.toFixed(2)}s/chunk
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-end gap-3 flex-shrink-0">
+                                        <div className="flex">
+                                            <Button
+                                                variant="secondary"
+                                                size="lg"
+                                                className="h-12 text-lg rounded-r-none"
+                                                onClick={() => setText(text.replace(/[*#]/g, ''))}
+                                                disabled={!text || isCleaning || isGenerating}
+                                            >
+                                                {isCleaning ? (
+                                                    <>
+                                                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                                        Cleaning...
+                                                    </>
+                                                ) : (
+                                                    "Clean Text"
+                                                )}
+                                            </Button>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="lg"
+                                                        className="h-12 px-2 rounded-l-none border-l border-secondary-foreground/20"
+                                                        disabled={!text || isCleaning || isGenerating}
+                                                    >
+                                                        <ChevronDown className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={handleCleanText}>
+                                                        <Sparkles className="mr-2 h-4 w-4" />
+                                                        LLM Clean
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                        <div className="flex">
+                                            <Button
+                                                size="lg"
+                                                className="min-w-[160px] text-lg h-12 rounded-r-none"
+                                                onClick={handleGenerate}
+                                                disabled={!text || isGenerating || isCleaning}
+                                            >
+                                                {isGenerating ? (
+                                                    <>
+                                                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                                        Synthesizing...
+                                                    </>
+                                                ) : (
+                                                    "Generate Audio"
+                                                )}
+                                            </Button>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        size="lg"
+                                                        className="h-12 px-2 rounded-l-none border-l border-primary-foreground/20"
+                                                        disabled={!text || isGenerating || isCleaning}
+                                                    >
+                                                        <ChevronDown className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={handleCleanAndGenerate}>
+                                                        <Sparkles className="mr-2 h-4 w-4" />
+                                                        LLM Clean & Generate
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
                                     </div>
-                                )}
 
-                                {error && (
-                                    <div className="p-4 rounded-md bg-destructive/10 text-destructive text-sm text-center flex-shrink-0">
-                                        {error}
-                                    </div>
-                                )}
+                                    {/* Progress Bar */}
+                                    {(isGenerating || generationStats) && (
+                                        <div className="space-y-2 animate-in fade-in duration-300 flex-shrink-0">
+                                            <div className="flex justify-between text-sm text-muted-foreground">
+                                                <span>{progressText}</span>
+                                                <span>{progress}%</span>
+                                            </div>
+                                            <Progress value={progress} className="h-2" />
+                                            {generationStats && !isGenerating && (
+                                                <div className="text-xs text-muted-foreground text-right">
+                                                    {generationStats.totalSeconds.toFixed(2)}s total • {generationStats.avgPerChunk.toFixed(2)}s/chunk
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
 
-                                {pdfMutation.isPending && (
-                                    <div className="flex items-center justify-center gap-2 text-muted-foreground animate-pulse flex-shrink-0">
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        <span>Extracting text from PDF...</span>
-                                    </div>
-                                )}
+                                    {error && (
+                                        <div className="p-4 rounded-md bg-destructive/10 text-destructive text-sm text-center flex-shrink-0">
+                                            {error}
+                                        </div>
+                                    )}
 
-                                <AudioPlayer audioUrl={audioUrl} filename={audioFilename} />
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
+                                    {pdfMutation.isPending && (
+                                        <div className="flex items-center justify-center gap-2 text-muted-foreground animate-pulse flex-shrink-0">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <span>Extracting text from PDF...</span>
+                                        </div>
+                                    )}
 
-            <HistorySidebar onSelectItem={handleSelectItem} />
+                                    <AudioPlayer audioUrl={audioUrl} filename={audioFilename} />
+                                </>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <HistorySidebar onSelectItem={handleSelectItem} activeDragId={activeDragId} />
+                <DragOverlay>
+                    {activeDragId && (
+                        <div className="rounded-lg border border-primary bg-card px-3 py-2 shadow-xl text-sm font-medium opacity-90 max-w-[200px] truncate">
+                            Moving item...
+                        </div>
+                    )}
+                </DragOverlay>
+            </DndContext >
         </div >
     )
 }

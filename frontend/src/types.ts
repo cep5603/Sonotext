@@ -33,3 +33,11 @@ export interface VoiceProfile {
     source: "designed" | "uploaded"
     created_at: number
 }
+
+export interface Project {
+    id: string
+    name: string
+    generation_ids: string[]
+    created_at: number
+    generations: HistoryItem[]  // resolved from backend
+}

@@ -217,3 +217,15 @@ export function getVoiceLanguage(voiceId: string): LanguageGroup | undefined {
 export function getVoiceInfo(voiceId: string): Voice | undefined {
     return VOICE_MAP.get(voiceId)?.voice
 }
+
+// Format voice display string for a history item
+// Handles built-in voices (flag + name) and custom profiles (🎤 prefix)
+export function formatVoiceDisplay(voiceId: string, voiceProfileId?: string | null): string {
+    if (voiceProfileId) {
+        return `🎤 ${voiceId}`
+    }
+    const voice = getVoiceInfo(voiceId)
+    const lang = getVoiceLanguage(voiceId)
+    if (voice && lang) return `${lang.flag} ${voice.name}`
+    return voiceId
+}

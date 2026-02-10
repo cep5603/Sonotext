@@ -11,11 +11,13 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
-import { getVoiceInfo, getVoiceLanguage } from "@/lib/voiceData"
+import { useDraggable } from "@dnd-kit/core"
+import { formatVoiceDisplay } from "@/lib/voiceData"
 import type { HistoryItem, VoiceProfile } from "@/types"
 
 interface HistorySidebarProps {
     onSelectItem: (item: HistoryItem, autoplay?: boolean) => void
+    activeDragId?: string | null
 }
 
 function formatDuration(seconds?: number): string {
@@ -37,15 +39,7 @@ function formatFilenameEdit(filename: string): string {
     return basename.replace(/\.wav$/, '').replace(/-[a-f0-9]{8}$/, '')
 }
 
-// Format voice display: flag + capitalized name (e.g. "🇫🇷 Siwis")
-function formatVoiceDisplay(voiceId: string): string {
-    const voice = getVoiceInfo(voiceId)
-    const lang = getVoiceLanguage(voiceId)
-    if (voice && lang) {
-        return `${lang.flag} ${voice.name}`
-    }
-    return voiceId // Fallback to raw ID
-}
+
 
 // Normalize string for search: lowercase, strip punctuation/symbols, collapse whitespace
 function normalizeForSearch(str: string): string {
@@ -223,7 +217,40 @@ function EditableTitle({
     )
 }
 
-export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
+// Draggable wrapper for history cards  
+function DraggableHistoryCard({ item, isDragging, children, onClick }: {
+    item: HistoryItem
+    isDragging: boolean
+    children: React.ReactNode
+    onClick: () => void
+}) {
+    const { attributes, listeners, setNodeRef, transform } = useDraggable({
+        id: item.id,
+        data: { type: "generation", item },
+    })
+
+    const style = transform ? {
+        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    } : undefined
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            {...listeners}
+            {...attributes}
+            className={cn(
+                "rounded-lg border border-border bg-background p-3 transition-all hover:bg-accent/50 cursor-pointer",
+                isDragging && "opacity-30"
+            )}
+            onClick={onClick}
+        >
+            {children}
+        </div>
+    )
+}
+
+export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarProps) {
     const queryClient = useQueryClient()
     const [renamingId, setRenamingId] = useState<string | null>(null)
     const [autoRenamingIds, setAutoRenamingIds] = useState<Set<string>>(new Set())
@@ -267,13 +294,9 @@ export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
     const getVoiceDisplayName = (item: HistoryItem) => {
         if (item.voice_profile_id) {
             const currentName = profileNameMap.get(item.voice_profile_id)
-            if (currentName) {
-                return `🎤 ${currentName}`  // Custom voice indicator
-            }
-            // Profile was deleted, fall back to stored name
-            return `🎤 ${item.voice}`
+            if (currentName) return `🎤 ${currentName}`
         }
-        return formatVoiceDisplay(item.voice)
+        return formatVoiceDisplay(item.voice, item.voice_profile_id)
     }
 
     // Filter history based on search query (normalized matching)
@@ -386,7 +409,7 @@ export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
     return (
         <div className="w-[26rem] border-l border-border bg-card/50 backdrop-blur-sm h-full flex flex-col shrink-0">
             <div className="p-4 border-b border-border shrink-0 flex items-center gap-3">
-                <h2 className="font-semibold tracking-tight shrink-0">Generation History</h2>
+                <h2 className="font-semibold tracking-tight shrink-0">History</h2>
                 <div className="relative flex-1">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                     <Input
@@ -395,7 +418,7 @@ export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="h-8 pl-8 pr-8 text-sm"
-                        aria-label="Search generation history"
+                        aria-label="Search history"
                     />
                     {searchQuery && (
                         <button
@@ -410,84 +433,82 @@ export function HistorySidebar({ onSelectItem }: HistorySidebarProps) {
                 </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {filteredHistory.map((item) => (
-                    <div
-                        key={item.id}
-                        className="rounded-lg border border-border bg-background p-3 transition-all hover:bg-accent/50 cursor-pointer"
-                        onClick={() => onSelectItem(item)}
-                    >
-                        <div className="space-y-1.5">
-                            {/* Editable filename */}
-                            <EditableTitle
-                                item={item}
-                                onRename={handleRename}
-                                onAutoRename={handleAutoRename}
-                                isRenaming={renamingId === item.id}
-                                isAutoRenaming={autoRenamingIds.has(item.id)}
-                                hasAutoRenameError={autoRenameErrors.has(item.id)}
-                                llmAvailable={llmAvailable}
-                            />
-                            {/* Text preview in gray */}
-                            <p className="text-xs text-muted-foreground leading-tight line-clamp-2 break-words" title={item.text}>
-                                {item.text || "No text"}
-                            </p>
-                            <div className="flex items-center text-xs text-muted-foreground gap-1.5 flex-wrap pt-1">
-                                <span>{getVoiceDisplayName(item)}</span>
-                                <span>•</span>
-                                <span>{item.speed}x</span>
-                                <span>•</span>
-                                <span className="flex items-center gap-1">
-                                    <Clock className="h-3 w-3 shrink-0" />
-                                    {formatDuration(item.duration)}
-                                </span>
-                                <span>•</span>
-                                <span>{new Date(item.timestamp * 1000).toLocaleDateString()}</span>
+                {filteredHistory.map((item) => {
+                    return (
+                        <DraggableHistoryCard key={item.id} item={item} isDragging={activeDragId === item.id} onClick={() => onSelectItem(item)}>
+                            <div className="space-y-1.5">
+                                {/* Editable filename */}
+                                <EditableTitle
+                                    item={item}
+                                    onRename={handleRename}
+                                    onAutoRename={handleAutoRename}
+                                    isRenaming={renamingId === item.id}
+                                    isAutoRenaming={autoRenamingIds.has(item.id)}
+                                    hasAutoRenameError={autoRenameErrors.has(item.id)}
+                                    llmAvailable={llmAvailable}
+                                />
+                                {/* Text preview in gray */}
+                                <p className="text-xs text-muted-foreground leading-tight line-clamp-2 break-words" title={item.text}>
+                                    {item.text || "No text"}
+                                </p>
+                                <div className="flex items-center text-xs text-muted-foreground gap-1.5 flex-wrap pt-1">
+                                    <span>{getVoiceDisplayName(item)}</span>
+                                    <span>•</span>
+                                    <span>{item.speed}x</span>
+                                    <span>•</span>
+                                    <span className="flex items-center gap-1">
+                                        <Clock className="h-3 w-3 shrink-0" />
+                                        {formatDuration(item.duration)}
+                                    </span>
+                                    <span>•</span>
+                                    <span>{new Date(item.timestamp * 1000).toLocaleDateString()}</span>
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="mt-3 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                className="h-7 flex-1 text-xs"
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    onSelectItem(item, true)
-                                }}
-                            >
-                                <Play className="mr-2 h-3 w-3" />
-                                Play
-                            </Button>
+                            <div className="mt-3 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="h-7 flex-1 text-xs"
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        onSelectItem(item, true)
+                                    }}
+                                >
+                                    <Play className="mr-2 h-3 w-3" />
+                                    Play
+                                </Button>
 
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
-                                        <MoreVertical className="h-3 w-3" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" side="left">
-                                    <DropdownMenuItem onClick={() => handleShowInExplorer(item.filename)}>
-                                        <FolderOpen className="mr-2 h-3 w-3" /> Show in Explorer
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => {
-                                        const a = document.createElement('a')
-                                        a.href = `http://localhost:8000${item.url}`
-                                        a.download = item.filename
-                                        a.click()
-                                    }}>
-                                        <Download className="mr-2 h-3 w-3" /> Download
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        className="text-destructive focus:text-destructive"
-                                        onClick={() => deleteMutation.mutate(item.id)}
-                                    >
-                                        <Trash2 className="mr-2 h-3 w-3" /> Delete
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-                    </div>
-                ))}
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                                            <MoreVertical className="h-3 w-3" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" side="left">
+                                        <DropdownMenuItem onClick={() => handleShowInExplorer(item.filename)}>
+                                            <FolderOpen className="mr-2 h-3 w-3" /> Show in Explorer
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => {
+                                            const a = document.createElement('a')
+                                            a.href = `http://localhost:8000${item.url}`
+                                            a.download = item.filename
+                                            a.click()
+                                        }}>
+                                            <Download className="mr-2 h-3 w-3" /> Download
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            className="text-destructive focus:text-destructive"
+                                            onClick={() => deleteMutation.mutate(item.id)}
+                                        >
+                                            <Trash2 className="mr-2 h-3 w-3" /> Delete
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+                        </DraggableHistoryCard>
+                    )
+                })}
                 {filteredHistory.length === 0 && (
                     <div className="text-center text-sm text-muted-foreground py-8">
                         {history?.length === 0
