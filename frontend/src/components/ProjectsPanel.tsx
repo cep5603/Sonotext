@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { Plus, MoreVertical, Trash2, SquarePen, Loader2, X, GripVertical, LayoutGrid, LayoutList } from "lucide-react"
+import { Plus, MoreVertical, Trash2, SquarePen, Loader2, X, GripVertical, LayoutGrid, LayoutList, Palette, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
+    DropdownMenuSeparator,
+    DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { useSortable, SortableContext, rectSortingStrategy, verticalListSortingStrategy } from "@dnd-kit/sortable"
@@ -15,6 +17,17 @@ import { CSS } from "@dnd-kit/utilities"
 import type { Project } from "@/types"
 
 type ViewMode = "grid" | "list"
+
+const PROJECT_COLORS: { value: string; label: string }[] = [
+    { value: "#dc2626", label: "Red" },
+    { value: "#ea580c", label: "Orange" },
+    { value: "#d97706", label: "Amber" },
+    { value: "#16a34a", label: "Green" },
+    { value: "#0d9488", label: "Teal" },
+    { value: "#2563eb", label: "Blue" },
+    { value: "#7c3aed", label: "Purple" },
+    { value: "#db2777", label: "Pink" },
+]
 
 interface ProjectsPanelProps {
     onOpenProject: (project: Project) => void
@@ -32,11 +45,12 @@ interface SortableProjectProps {
     onOpen: () => void
     onRename: (name: string) => void
     onDelete: () => void
+    onColorChange: (color: string | null) => void
 }
 
 
 // Grid Tile
-function ProjectTile({ project, onOpen, onRename, onDelete }: SortableProjectProps) {
+function ProjectTile({ project, onOpen, onRename, onDelete, onColorChange }: SortableProjectProps) {
     const [isEditing, setIsEditing] = useState(false)
     const [editValue, setEditValue] = useState("")
     const inputRef = useRef<HTMLInputElement>(null)
@@ -48,7 +62,7 @@ function ProjectTile({ project, onOpen, onRename, onDelete }: SortableProjectPro
         data: { type: "project", projectId: project.id },
     })
 
-    const style = { transform: CSS.Transform.toString(transform), transition }
+    const sortableStyle = { transform: CSS.Transform.toString(transform), transition }
 
     const startEditing = (e?: React.MouseEvent) => {
         e?.stopPropagation()
@@ -71,13 +85,17 @@ function ProjectTile({ project, onOpen, onRename, onDelete }: SortableProjectPro
     return (
         <div
             ref={setNodeRef}
-            style={style}
             className={cn(
-                "group relative rounded-xl border bg-background p-4 transition-colors cursor-pointer",
+                "group relative rounded-xl border bg-background p-4 transition-colors cursor-pointer overflow-hidden",
                 "hover:bg-accent/50 hover:border-accent-foreground/20",
                 isOver && "border-primary bg-primary/10 ring-2 ring-primary/30",
                 isDragging && "opacity-50 z-50 shadow-2xl"
             )}
+            style={{
+                ...sortableStyle,
+                borderLeftWidth: project.color ? '3px' : undefined,
+                borderLeftColor: project.color || undefined,
+            }}
             onClick={onOpen}
         >
             <div className="flex items-start justify-between gap-2 mb-3">
@@ -102,7 +120,7 @@ function ProjectTile({ project, onOpen, onRename, onDelete }: SortableProjectPro
                         <h3 className="font-semibold text-sm truncate">{project.name}</h3>
                     )}
                 </div>
-                <ProjectMenu onRename={() => startEditing()} onDelete={onDelete} />
+                <ProjectMenu onRename={() => startEditing()} onDelete={onDelete} onColorChange={onColorChange} currentColor={project.color} />
             </div>
             <p className="text-xs text-muted-foreground mb-2">
                 {count} generation{count !== 1 ? "s" : ""}
@@ -127,7 +145,7 @@ function ProjectTile({ project, onOpen, onRename, onDelete }: SortableProjectPro
 
 
 // List Row
-function ProjectRow({ project, onOpen, onRename, onDelete }: SortableProjectProps) {
+function ProjectRow({ project, onOpen, onRename, onDelete, onColorChange }: SortableProjectProps) {
     const [isEditing, setIsEditing] = useState(false)
     const [editValue, setEditValue] = useState("")
     const inputRef = useRef<HTMLInputElement>(null)
@@ -139,7 +157,7 @@ function ProjectRow({ project, onOpen, onRename, onDelete }: SortableProjectProp
         data: { type: "project", projectId: project.id },
     })
 
-    const style = { transform: CSS.Transform.toString(transform), transition }
+    const sortableStyle = { transform: CSS.Transform.toString(transform), transition }
 
     const startEditing = (e?: React.MouseEvent) => {
         e?.stopPropagation()
@@ -162,13 +180,17 @@ function ProjectRow({ project, onOpen, onRename, onDelete }: SortableProjectProp
     return (
         <div
             ref={setNodeRef}
-            style={style}
             className={cn(
-                "group flex items-center gap-3 rounded-lg border bg-background px-3 py-2.5 transition-colors cursor-pointer",
+                "group flex items-center gap-3 rounded-lg border bg-background px-3 py-2.5 transition-colors cursor-pointer overflow-hidden",
                 "hover:bg-accent/50 hover:border-accent-foreground/20",
                 isOver && "border-primary bg-primary/10 ring-2 ring-primary/30",
                 isDragging && "opacity-50 z-50 shadow-2xl"
             )}
+            style={{
+                ...sortableStyle,
+                borderLeftWidth: project.color ? '3px' : undefined,
+                borderLeftColor: project.color || undefined,
+            }}
             onClick={onOpen}
         >
             <button
@@ -195,14 +217,19 @@ function ProjectRow({ project, onOpen, onRename, onDelete }: SortableProjectProp
             <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
                 {count} generation{count !== 1 ? "s" : ""}
             </span>
-            <ProjectMenu onRename={() => startEditing()} onDelete={onDelete} />
+            <ProjectMenu onRename={() => startEditing()} onDelete={onDelete} onColorChange={onColorChange} currentColor={project.color} />
         </div>
     )
 }
 
 
 // Shared dropdown menu
-function ProjectMenu({ onRename, onDelete }: { onRename: () => void; onDelete: () => void }) {
+function ProjectMenu({ onRename, onDelete, onColorChange, currentColor }: {
+    onRename: () => void
+    onDelete: () => void
+    onColorChange: (color: string | null) => void
+    currentColor?: string | null
+}) {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -217,6 +244,43 @@ function ProjectMenu({ onRename, onDelete }: { onRename: () => void; onDelete: (
                 <DropdownMenuItem onClick={onRename}>
                     <SquarePen className="mr-2 h-3 w-3" /> Rename
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal flex items-center gap-1.5">
+                    <Palette className="h-3 w-3" /> Color
+                </DropdownMenuLabel>
+                <div className="px-2 pb-1.5 pt-0.5">
+                    <div className="flex items-center gap-1 flex-wrap">
+                        <button
+                            onClick={() => onColorChange(null)}
+                            className={cn(
+                                "h-5 w-5 rounded-full border-2 transition-all flex items-center justify-center",
+                                !currentColor
+                                    ? "border-foreground scale-110"
+                                    : "border-muted-foreground/30 hover:border-muted-foreground/60"
+                            )}
+                            title="No color"
+                        >
+                            {!currentColor && <X className="h-2.5 w-2.5 text-muted-foreground" />}
+                        </button>
+                        {PROJECT_COLORS.map((c) => (
+                            <button
+                                key={c.value}
+                                onClick={() => onColorChange(c.value)}
+                                className={cn(
+                                    "h-5 w-5 rounded-full border-2 transition-all flex items-center justify-center",
+                                    currentColor === c.value
+                                        ? "border-foreground scale-110"
+                                        : "border-transparent hover:scale-110"
+                                )}
+                                style={{ backgroundColor: c.value }}
+                                title={c.label}
+                            >
+                                {currentColor === c.value && <Check className="h-2.5 w-2.5 text-white" />}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
                     <Trash2 className="mr-2 h-3 w-3" /> Delete
                 </DropdownMenuItem>
@@ -392,6 +456,12 @@ export function ProjectsPanel({ onOpenProject }: ProjectsPanelProps) {
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
     })
 
+    const colorMutation = useMutation({
+        mutationFn: ({ id, color }: { id: string; color: string | null }) =>
+            axios.patch(`http://localhost:8000/api/projects/${id}/color`, { color }).then((r) => r.data),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
+    })
+
     const sortableIds = projects.map((p) => `project-${p.id}`)
 
     if (isLoading) {
@@ -422,6 +492,7 @@ export function ProjectsPanel({ onOpenProject }: ProjectsPanelProps) {
                                 onOpen={() => onOpenProject(project)}
                                 onRename={(name) => renameMutation.mutate({ id: project.id, name })}
                                 onDelete={() => deleteMutation.mutate(project.id)}
+                                onColorChange={(color) => colorMutation.mutate({ id: project.id, color })}
                             />
                         ))}
                         <NewProjectItem onCreate={(name) => createMutation.mutate(name)} />

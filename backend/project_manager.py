@@ -53,6 +53,7 @@ class ProjectManager:
             project = {
                 "id": str(uuid.uuid4()),
                 "name": name.strip(),
+                "color": None,
                 "generation_ids": [],
                 "created_at": time.time(),
             }
@@ -66,6 +67,16 @@ class ProjectManager:
             for p in projects:
                 if p["id"] == project_id:
                     p["name"] = name.strip()
+                    self._save_projects(projects)
+                    return p
+            return None
+
+    def update_project_color(self, project_id: str, color: Optional[str]) -> Optional[Dict]:
+        with self._lock:
+            projects = self._load_projects()
+            for p in projects:
+                if p["id"] == project_id:
+                    p["color"] = color
                     self._save_projects(projects)
                     return p
             return None

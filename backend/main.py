@@ -787,6 +787,9 @@ class CreateProjectRequest(BaseModel):
 class RenameProjectRequest(BaseModel):
     name: str
 
+class UpdateProjectColorRequest(BaseModel):
+    color: str | None = None
+
 class AddGenerationRequest(BaseModel):
     generation_id: str
 
@@ -829,6 +832,15 @@ def rename_project(project_id: str, req: RenameProjectRequest):
     if not req.name or not req.name.strip():
         raise HTTPException(status_code=400, detail="Name cannot be empty")
     result = project_manager.rename_project(project_id, req.name)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return _resolve_project(result)
+
+
+@app.patch("/api/projects/{project_id}/color")
+def update_project_color(project_id: str, req: UpdateProjectColorRequest):
+    """Update a project's color."""
+    result = project_manager.update_project_color(project_id, req.color)
     if result is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return _resolve_project(result)

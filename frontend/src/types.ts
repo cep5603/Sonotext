@@ -37,6 +37,7 @@ export interface VoiceProfile {
 export interface Project {
     id: string
     name: string
+    color?: string | null
     generation_ids: string[]
     created_at: number
     generations: HistoryItem[]  // resolved from backend
