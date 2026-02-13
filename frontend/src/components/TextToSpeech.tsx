@@ -35,9 +35,10 @@ function formatDuration(seconds?: number): string {
 interface TextToSpeechProps {
     selectedItem: HistoryItem | null
     onSelectedItemChange: (item: HistoryItem | null) => void
+    resetToGeneratorToken: number
 }
 
-export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeechProps) {
+export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGeneratorToken }: TextToSpeechProps) {
     const [text, setText] = useState("")
     const [voice, setVoice] = useState("af_heart")
     const [lang, setLang] = useState<string | null>(null)  // null = auto-detect
@@ -206,6 +207,12 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
         setAlignmentData(null)
         setSeekToTime(null)
     }
+
+    useEffect(() => {
+        if (resetToGeneratorToken > 0) {
+            goToGenerator()
+        }
+    }, [resetToGeneratorToken])
 
     // Switch to appropriate default voice when engine changes
     useEffect(() => {
@@ -427,12 +434,37 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
         }
     }
 
+    const getProjectFromCache = (projectId: string) => {
+        const directProject = queryClient.getQueryData<Project>(["projects", projectId])
+        if (directProject) return directProject
+        const projectList = queryClient.getQueryData<Project[]>(["projects"]) || []
+        return projectList.find((project) => project.id === projectId)
+    }
+
+    const updateProjectBreadcrumbForSelection = (item: HistoryItem) => {
+        const currentProjectId = sourceProjectId ?? activeProjectId
+        if (!currentProjectId) {
+            setSourceProjectId(null)
+            return
+        }
+
+        const project = getProjectFromCache(currentProjectId)
+        const isInProject = project?.generations?.some((generation) => generation.id === item.id)
+
+        if (isInProject) {
+            setSourceProjectId(currentProjectId)
+        } else {
+            setSourceProjectId(null)
+        }
+    }
+
     const handleSelectItem = (item: HistoryItem, autoplay: boolean = false) => {
         // If clicking Play on already-selected item, just trigger autoplay
         if (selectedItem?.id === item.id && autoplay) {
             setShouldAutoplay(true)
             return
         }
+        updateProjectBreadcrumbForSelection(item)
         onSelectedItemChange(item)
         setAudioUrl(`http://localhost:8000${item.url}`)
         setAudioFilename(item.filename)

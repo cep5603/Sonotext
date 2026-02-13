@@ -8,9 +8,11 @@ const queryClient = new QueryClient()
 
 function App() {
   const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null)
+  const [logoResetToken, setLogoResetToken] = useState(0)
 
   const handleLogoClick = () => {
     setSelectedItem(null)
+    setLogoResetToken((prev) => prev + 1)
   }
 
   return (
@@ -23,6 +25,7 @@ function App() {
           <TextToSpeech
             selectedItem={selectedItem}
             onSelectedItemChange={setSelectedItem}
+            resetToGeneratorToken={logoResetToken}
           />
         </main>
       </div>
