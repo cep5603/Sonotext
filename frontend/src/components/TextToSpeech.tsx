@@ -75,6 +75,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
     const [viewMode, setViewMode] = useState<ViewMode>(selectedItem ? "detail" : "generator")
     const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
     const [activeProjectName, setActiveProjectName] = useState<string | null>(null)
+    const [activeProjectColor, setActiveProjectColor] = useState<string | null>(null)
     const [sourceProjectId, setSourceProjectId] = useState<string | null>(null) // which project the detail view came from
     const [activeDragId, setActiveDragId] = useState<string | null>(null)
 
@@ -181,6 +182,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
         onSelectedItemChange(null)
         setActiveProjectId(null)
         setActiveProjectName(null)
+        setActiveProjectColor(null)
         setSourceProjectId(null)
         setViewMode("projects")
     }
@@ -189,6 +191,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
         onSelectedItemChange(null)
         setActiveProjectId(project.id)
         setActiveProjectName(project.name)
+        setActiveProjectColor(project.color || null)
         setSourceProjectId(null)
         setViewMode("projectDetail")
     }
@@ -197,6 +200,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
         onSelectedItemChange(null)
         setActiveProjectId(null)
         setActiveProjectName(null)
+        setActiveProjectColor(null)
         setSourceProjectId(null)
         setViewMode("generator")
         setAlignmentData(null)
@@ -540,9 +544,14 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                                 {/* Project Name */}
                                 {(viewMode === "projectDetail" || (viewMode === "detail" && sourceProjectId)) && activeProjectName && (
                                     <>
-                                        <span className="text-muted-foreground/50">/</span>
+                                        <span style={{ color: activeProjectColor || undefined }} className={activeProjectColor ? 'opacity-70' : 'text-muted-foreground/50'}>/</span>
                                         {viewMode === "projectDetail" ? (
-                                            <span className="text-foreground font-medium">{activeProjectName}</span>
+                                            <span
+                                                className="font-medium"
+                                                style={{ color: activeProjectColor || undefined }}
+                                            >
+                                                {activeProjectName}
+                                            </span>
                                         ) : (
                                             <button
                                                 onClick={() => {
@@ -553,10 +562,12 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                                                         setSourceProjectId(null)
                                                     }
                                                 }}
-                                                className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                                className="hover:text-foreground transition-colors flex items-center gap-1"
                                             >
-                                                <ArrowLeft className="h-3.5 w-3.5" />
-                                                {activeProjectName}
+                                                <ArrowLeft className="h-3.5 w-3.5" style={{ color: activeProjectColor || undefined }} />
+                                                <span style={{ color: activeProjectColor || undefined }} className={activeProjectColor ? 'opacity-70' : 'text-muted-foreground'}>
+                                                    {activeProjectName}
+                                                </span>
                                             </button>
                                         )}
                                     </>
@@ -659,6 +670,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange }: TextToSpeec
                                 /* Project Detail View */
                                 <ProjectDetailView
                                     projectId={activeProjectId}
+                                    projectColor={activeProjectColor}
                                     onSelectGeneration={handleSelectFromProject}
                                 />
 

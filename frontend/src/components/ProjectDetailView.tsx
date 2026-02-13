@@ -20,6 +20,7 @@ type ViewMode = "grid" | "list"
 
 interface ProjectDetailViewProps {
     projectId: string
+    projectColor?: string | null
     onSelectGeneration: (item: HistoryItem, autoplay?: boolean) => void
 }
 
@@ -71,9 +72,10 @@ function GenerationMenu({ gen, onRemove, onShowInExplorer }: {
 
 
 // List Card (existing layout)
-function SortableGenerationCard({ gen, projectId, onSelect, onPlay, onRemove, onShowInExplorer }: {
+function SortableGenerationCard({ gen, projectId, projectColor, onSelect, onPlay, onRemove, onShowInExplorer }: {
     gen: HistoryItem
     projectId: string
+    projectColor?: string | null
     onSelect: () => void
     onPlay: () => void
     onRemove: () => void
@@ -90,11 +92,16 @@ function SortableGenerationCard({ gen, projectId, onSelect, onPlay, onRemove, on
 
     return (
         <div
-            ref={setNodeRef} style={style}
+            ref={setNodeRef}
             className={cn(
-                "group rounded-lg border border-border bg-background p-3 transition-colors hover:bg-accent/50 cursor-pointer",
+                "group rounded-lg border border-border bg-background p-3 transition-colors hover:bg-accent/50 cursor-pointer overflow-hidden",
                 isDragging && "opacity-50 z-50 shadow-2xl"
             )}
+            style={{
+                ...style,
+                borderLeftWidth: projectColor ? '3px' : undefined,
+                borderLeftColor: projectColor || undefined,
+            }}
             onClick={onSelect}
         >
             <div className="flex gap-2">
@@ -138,9 +145,10 @@ function SortableGenerationCard({ gen, projectId, onSelect, onPlay, onRemove, on
 
 
 // Grid Tile (compact card for grid layout)
-function SortableGenerationTile({ gen, projectId, onSelect, onPlay, onRemove, onShowInExplorer }: {
+function SortableGenerationTile({ gen, projectId, projectColor, onSelect, onPlay, onRemove, onShowInExplorer }: {
     gen: HistoryItem
     projectId: string
+    projectColor?: string | null
     onSelect: () => void
     onPlay: () => void
     onRemove: () => void
@@ -157,12 +165,17 @@ function SortableGenerationTile({ gen, projectId, onSelect, onPlay, onRemove, on
 
     return (
         <div
-            ref={setNodeRef} style={style}
+            ref={setNodeRef}
             className={cn(
-                "group relative rounded-xl border bg-background p-4 transition-colors cursor-pointer",
+                "group relative rounded-xl border bg-background p-4 transition-colors cursor-pointer overflow-hidden",
                 "hover:bg-accent/50 hover:border-accent-foreground/20",
                 isDragging && "opacity-50 z-50 shadow-2xl"
             )}
+            style={{
+                ...style,
+                borderLeftWidth: projectColor ? '3px' : undefined,
+                borderLeftColor: projectColor || undefined,
+            }}
             onClick={onSelect}
         >
             <div className="flex items-start justify-between gap-2 mb-2">
@@ -236,7 +249,7 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
 
 
 // Main View
-export function ProjectDetailView({ projectId, onSelectGeneration }: ProjectDetailViewProps) {
+export function ProjectDetailView({ projectId, projectColor, onSelectGeneration }: ProjectDetailViewProps) {
     const queryClient = useQueryClient()
 
     const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -298,7 +311,12 @@ export function ProjectDetailView({ projectId, onSelectGeneration }: ProjectDeta
             {/* Header */}
             <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                    <h2 className="text-xl font-semibold tracking-tight truncate">{project.name}</h2>
+                    <h2
+                        className="text-xl font-semibold tracking-tight truncate"
+                        style={{ color: projectColor || undefined }}
+                    >
+                        {project.name}
+                    </h2>
                     <span className="text-sm text-muted-foreground shrink-0">
                         {project.generations.length} generation{project.generations.length !== 1 ? "s" : ""}
                     </span>
@@ -321,6 +339,7 @@ export function ProjectDetailView({ projectId, onSelectGeneration }: ProjectDeta
                                     key={gen.id}
                                     gen={gen}
                                     projectId={projectId}
+                                    projectColor={projectColor}
                                     onSelect={() => onSelectGeneration(gen)}
                                     onPlay={() => onSelectGeneration(gen, true)}
                                     onRemove={() => removeMutation.mutate(gen.id)}
