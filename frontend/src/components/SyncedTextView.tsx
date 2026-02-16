@@ -89,6 +89,7 @@ export function SyncedTextView({
     const activeWordRef = useRef<HTMLSpanElement>(null)
     const lastScrolledIndex = useRef(-1)
     const scrollThrottleRef = useRef(false)
+    const scrollThrottleTimeoutRef = useRef<number | null>(null)
 
     // Pre-compute separators once when alignment data or text changes
     const separators = useMemo(() => {
@@ -96,7 +97,11 @@ export function SyncedTextView({
         return alignmentData.map((word, index) => {
             const nextWord = alignmentData[index + 1]
             if (!nextWord) return ""
-            const textBetween = text.slice(word.charEnd, nextWord.charStart)
+
+            const safeStart = Math.max(0, Math.min(text.length, word.charEnd))
+            const safeEnd = Math.max(safeStart, Math.min(text.length, nextWord.charStart))
+            const textBetween = text.slice(safeStart, safeEnd)
+
             // Use the original whitespace if it contains newlines
             if (textBetween.includes("\n")) {
                 return textBetween
@@ -114,6 +119,7 @@ export function SyncedTextView({
     // Auto-scroll to keep the active word in view (throttled)
     useEffect(() => {
         if (!autoScroll || !isPlaying) return
+        if (currentWordIndex < 0) return
         if (currentWordIndex === lastScrolledIndex.current) return
         if (!activeWordRef.current) return
         if (scrollThrottleRef.current) return
@@ -122,16 +128,28 @@ export function SyncedTextView({
         scrollThrottleRef.current = true
 
         activeWordRef.current.scrollIntoView({
-            behavior: "smooth",
+            behavior: "auto",
             block: "center",
             inline: "nearest"
         })
 
         // Throttle scroll to at most once per 300ms to avoid piling up animations
-        setTimeout(() => {
+        if (scrollThrottleTimeoutRef.current !== null) {
+            window.clearTimeout(scrollThrottleTimeoutRef.current)
+        }
+        scrollThrottleTimeoutRef.current = window.setTimeout(() => {
             scrollThrottleRef.current = false
+            scrollThrottleTimeoutRef.current = null
         }, 300)
     }, [currentWordIndex, autoScroll, isPlaying])
+
+    useEffect(() => {
+        return () => {
+            if (scrollThrottleTimeoutRef.current !== null) {
+                window.clearTimeout(scrollThrottleTimeoutRef.current)
+            }
+        }
+    }, [])
 
     // Reset scroll tracking when audio restarts
     useEffect(() => {

@@ -19,6 +19,8 @@ function formatTime(seconds: number): string {
     return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
+const TIME_UPDATE_INTERVAL_MS = 100
+
 export function AudioPlayer({
     audioUrl,
     filename,
@@ -43,6 +45,22 @@ export function AudioPlayer({
     const onTimeUpdateRef = useRef(onTimeUpdate)
     const onPlayingChangeRef = useRef(onPlayingChange)
     const rafIdRef = useRef<number | null>(null)
+    const isPollingRef = useRef(false)
+    const lastTimeUpdateRef = useRef(0)
+
+    const stopPolling = () => {
+        isPollingRef.current = false
+        if (rafIdRef.current !== null) {
+            cancelAnimationFrame(rafIdRef.current)
+            rafIdRef.current = null
+        }
+    }
+
+    const emitCurrentTime = (ws: WaveSurfer) => {
+        const t = ws.getCurrentTime()
+        setCurrentTime(t)
+        onTimeUpdateRef.current?.(t)
+    }
 
     // Keep callback refs in sync
     useEffect(() => {
@@ -72,6 +90,7 @@ export function AudioPlayer({
 
         // Cleanup previous instance if exists
         if (wavesurferRef.current) {
+            stopPolling()
             wavesurferRef.current.destroy()
             wavesurferRef.current = null
         }
@@ -99,32 +118,46 @@ export function AudioPlayer({
         ws.on('play', () => {
             setIsPlaying(true)
             onPlayingChangeRef.current?.(true)
+
+            if (isPollingRef.current) {
+                return
+            }
+
+            isPollingRef.current = true
+            lastTimeUpdateRef.current = 0
+
             // Start rAF polling for smooth time updates
             const poll = () => {
-                if (wavesurferRef.current) {
-                    const t = wavesurferRef.current.getCurrentTime()
-                    setCurrentTime(t)
-                    onTimeUpdateRef.current?.(t)
+                if (!isPollingRef.current) {
+                    return
                 }
+
+                // Stop if this instance is no longer current or playback has stopped
+                if (wavesurferRef.current !== ws || !ws.isPlaying()) {
+                    stopPolling()
+                    return
+                }
+
+                const now = performance.now()
+                if (now - lastTimeUpdateRef.current >= TIME_UPDATE_INTERVAL_MS) {
+                    emitCurrentTime(ws)
+                    lastTimeUpdateRef.current = now
+                }
+
                 rafIdRef.current = requestAnimationFrame(poll)
             }
+
             rafIdRef.current = requestAnimationFrame(poll)
         })
         ws.on('pause', () => {
             setIsPlaying(false)
             onPlayingChangeRef.current?.(false)
-            if (rafIdRef.current !== null) {
-                cancelAnimationFrame(rafIdRef.current)
-                rafIdRef.current = null
-            }
+            stopPolling()
         })
         ws.on('finish', () => {
             setIsPlaying(false)
             onPlayingChangeRef.current?.(false)
-            if (rafIdRef.current !== null) {
-                cancelAnimationFrame(rafIdRef.current)
-                rafIdRef.current = null
-            }
+            stopPolling()
         })
         ws.on('error', (e) => {
             // Ignore abort errors - they're expected when component unmounts during load
@@ -146,9 +179,7 @@ export function AudioPlayer({
         })
 
         ws.on('seeking', () => {
-            const t = ws.getCurrentTime()
-            setCurrentTime(t)
-            onTimeUpdateRef.current?.(t)
+            emitCurrentTime(ws)
         })
 
         // Load the audio - catch AbortError which happens when component unmounts during load
@@ -159,10 +190,7 @@ export function AudioPlayer({
 
         // Cleanup on unmount or URL change
         return () => {
-            if (rafIdRef.current !== null) {
-                cancelAnimationFrame(rafIdRef.current)
-                rafIdRef.current = null
-            }
+            stopPolling()
             ws.destroy()
             wavesurferRef.current = null
         }
@@ -180,7 +208,8 @@ export function AudioPlayer({
     // Handle external seek requests
     useEffect(() => {
         if (seekToTime !== null && seekToTime !== undefined && wavesurferRef.current && isReady) {
-            wavesurferRef.current.seekTo(seekToTime / duration)
+            const seekRatio = duration > 0 ? Math.min(Math.max(seekToTime / duration, 0), 1) : 0
+            wavesurferRef.current.seekTo(seekRatio)
         }
     }, [seekToTime, duration, isReady])
 
