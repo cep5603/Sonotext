@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { Loader2, Mic, Palette, Upload, Wand2 } from "lucide-react"
+import { SpinnerGapIcon, MicrophoneIcon, PaletteIcon, UploadSimpleIcon, MagicWandIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -55,7 +55,7 @@ export function CustomVoicesSection({
     if (isLoading) {
         return (
             <div className="flex items-center justify-center p-4">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <SpinnerGapIcon size={16} className="animate-spin text-muted-foreground" />
             </div>
         )
     }
@@ -100,9 +100,9 @@ export function CustomVoicesSection({
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
                                 {selectedProfile.source === "designed" ? (
-                                    <Palette className="h-3 w-3 shrink-0 opacity-70" />
+                                    <PaletteIcon size={16} className="shrink-0 opacity-70" />
                                 ) : (
-                                    <Mic className="h-3 w-3 shrink-0 opacity-70" />
+                                    <MicrophoneIcon size={16} className="shrink-0 opacity-70" />
                                 )}
                                 <span className="truncate font-medium">{selectedProfile.name}</span>
                             </div>
@@ -247,11 +247,11 @@ export function CreateVoiceDialog({ open, onOpenChange }: CreateVoiceDialogProps
                 <Tabs value={tab} onValueChange={(v) => setTab(v as "design" | "upload")}>
                     <TabsList className="grid w-full grid-cols-2">
                         <TabsTrigger value="design" className="gap-1.5">
-                            <Palette className="h-3.5 w-3.5" />
+                            <PaletteIcon size={16} />
                             Design Voice
                         </TabsTrigger>
                         <TabsTrigger value="upload" className="gap-1.5">
-                            <Upload className="h-3.5 w-3.5" />
+                            <UploadSimpleIcon size={16} />
                             Clone Voice
                         </TabsTrigger>
                     </TabsList>
@@ -299,12 +299,12 @@ export function CreateVoiceDialog({ open, onOpenChange }: CreateVoiceDialogProps
                         >
                             {designMutation.isPending ? (
                                 <>
-                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    <SpinnerGapIcon size={16} className="animate-spin mr-2" />
                                     Creating Voice...
                                 </>
                             ) : (
                                 <>
-                                    <Palette className="h-4 w-4 mr-2" />
+                                    <PaletteIcon size={16} className="mr-2" />
                                     Create Voice
                                 </>
                             )}
@@ -348,12 +348,12 @@ export function CreateVoiceDialog({ open, onOpenChange }: CreateVoiceDialogProps
                                 >
                                     {transcribeMutation.isPending ? (
                                         <>
-                                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                            <SpinnerGapIcon size={16} className="animate-spin mr-1" />
                                             Transcribing...
                                         </>
                                     ) : (
                                         <>
-                                            <Wand2 className="h-3 w-3 mr-1" />
+                                            <MagicWandIcon size={16} className="mr-1" />
                                             Auto-transcribe
                                         </>
                                     )}
@@ -393,12 +393,12 @@ export function CreateVoiceDialog({ open, onOpenChange }: CreateVoiceDialogProps
                         >
                             {uploadMutation.isPending ? (
                                 <>
-                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    <SpinnerGapIcon size={16} className="animate-spin mr-2" />
                                     Uploading...
                                 </>
                             ) : (
                                 <>
-                                    <Mic className="h-4 w-4 mr-2" />
+                                    <MicrophoneIcon size={16} className="mr-2" />
                                     Clone Voice
                                 </>
                             )}

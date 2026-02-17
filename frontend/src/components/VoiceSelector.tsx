@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react"
-import { ChevronDown, Check } from "lucide-react"
+import { CaretDownIcon, CheckIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -79,7 +79,7 @@ function VoiceRow({
                 </Badge>
             )}
             {isSelected && (
-                <Check className="w-4 h-4 text-primary shrink-0" />
+                <CheckIcon size={16} className="text-primary shrink-0" />
             )}
         </button>
     )
@@ -124,8 +124,8 @@ export function VoiceSelector({ value, onValueChange }: VoiceSelectorProps) {
                     className="w-full justify-between font-normal px-3"
                 >
                     <span className="truncate">{triggerText}</span>
-                    <ChevronDown className={cn(
-                        "h-4 w-4 shrink-0 opacity-50 transition-transform duration-200",
+                    <CaretDownIcon size={16} className={cn(
+                        "shrink-0 opacity-50 transition-transform duration-200",
                         open && "rotate-180"
                     )} />
                 </Button>

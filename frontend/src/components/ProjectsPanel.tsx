@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { Plus, MoreVertical, Trash2, SquarePen, Loader2, X, GripVertical, LayoutGrid, LayoutList, Palette, Check } from "lucide-react"
+import { PlusIcon, DotsThreeVerticalIcon, TrashIcon, PencilSimpleIcon, SpinnerGapIcon, XIcon, DotsSixVerticalIcon, SquaresFourIcon, ListIcon, PaletteIcon, CheckIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
     DropdownMenu,
@@ -105,7 +105,7 @@ function ProjectTile({ project, onOpen, onRename, onDelete, onColorChange }: Sor
                         className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 -ml-1 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity touch-none"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                        <DotsSixVerticalIcon size={16} className="text-muted-foreground" />
                     </button>
                     {isEditing ? (
                         <input
@@ -198,7 +198,7 @@ function ProjectRow({ project, onOpen, onRename, onDelete, onColorChange }: Sort
                 className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity touch-none"
                 onClick={(e) => e.stopPropagation()}
             >
-                <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                <DotsSixVerticalIcon size={16} className="text-muted-foreground" />
             </button>
             <div className="flex-1 min-w-0">
                 {isEditing ? (
@@ -237,16 +237,16 @@ function ProjectMenu({ onRename, onDelete, onColorChange, currentColor }: {
                     variant="ghost" size="icon"
                     className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
-                    <MoreVertical className="h-3 w-3" />
+                    <DotsThreeVerticalIcon size={16} />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenuItem onClick={onRename}>
-                    <SquarePen className="mr-2 h-3 w-3" /> Rename
+                    <PencilSimpleIcon size={16} className="mr-2" /> Rename
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel className="text-xs text-muted-foreground font-normal flex items-center gap-1.5">
-                    <Palette className="h-3 w-3" /> Color
+                    <PaletteIcon size={16} /> Color
                 </DropdownMenuLabel>
                 <div className="px-2 pb-1.5 pt-0.5">
                     <div className="flex items-center gap-1 flex-wrap">
@@ -260,7 +260,7 @@ function ProjectMenu({ onRename, onDelete, onColorChange, currentColor }: {
                             )}
                             title="No color"
                         >
-                            {!currentColor && <X className="h-2.5 w-2.5 text-muted-foreground" />}
+                            {!currentColor && <XIcon size={10} className="text-muted-foreground" />}
                         </button>
                         {PROJECT_COLORS.map((c) => (
                             <button
@@ -275,14 +275,14 @@ function ProjectMenu({ onRename, onDelete, onColorChange, currentColor }: {
                                 style={{ backgroundColor: c.value }}
                                 title={c.label}
                             >
-                                {currentColor === c.value && <Check className="h-2.5 w-2.5 text-white" />}
+                                {currentColor === c.value && <CheckIcon size={10} className="text-white" />}
                             </button>
                         ))}
                     </div>
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
-                    <Trash2 className="mr-2 h-3 w-3" /> Delete
+                    <TrashIcon size={16} className="mr-2" /> Delete
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
@@ -320,7 +320,7 @@ function NewProjectTile({ onCreate }: { onCreate: (name: string) => void }) {
                 <div className="flex gap-2">
                     <Button size="sm" className="h-7 text-xs flex-1" onClick={handleCreate}>Create</Button>
                     <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setIsCreating(false); setName("") }}>
-                        <X className="h-3 w-3" />
+                        <XIcon size={16} />
                     </Button>
                 </div>
             </div>
@@ -337,7 +337,7 @@ function NewProjectTile({ onCreate }: { onCreate: (name: string) => void }) {
                 "transition-all cursor-pointer"
             )}
         >
-            <Plus className="h-6 w-6" />
+            <PlusIcon size={24} />
             <span className="text-sm font-medium">New Project</span>
         </button>
     )
@@ -362,7 +362,7 @@ function NewProjectRow({ onCreate }: { onCreate: (name: string) => void }) {
     if (isCreating) {
         return (
             <div className="flex items-center gap-2 rounded-lg border-2 border-dashed border-primary/40 px-3 py-2">
-                <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
+                <PlusIcon size={16} className="text-muted-foreground shrink-0" />
                 <input
                     ref={inputRef} type="text" placeholder="Project name..." value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -372,7 +372,7 @@ function NewProjectRow({ onCreate }: { onCreate: (name: string) => void }) {
                 />
                 <Button size="sm" className="h-7 text-xs" onClick={handleCreate}>Create</Button>
                 <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setIsCreating(false); setName("") }}>
-                    <X className="h-3 w-3" />
+                    <XIcon size={16} />
                 </Button>
             </div>
         )
@@ -386,7 +386,7 @@ function NewProjectRow({ onCreate }: { onCreate: (name: string) => void }) {
                 "text-muted-foreground hover:border-primary/50 hover:text-foreground transition-all cursor-pointer"
             )}
         >
-            <Plus className="h-4 w-4" />
+            <PlusIcon size={16} />
             <span className="text-sm font-medium">New Project</span>
         </button>
     )
@@ -405,7 +405,7 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
                 )}
                 aria-label="Grid view"
             >
-                <LayoutGrid className="h-3.5 w-3.5" />
+                <SquaresFourIcon size={16} />
             </button>
             <button
                 onClick={() => onChange("list")}
@@ -415,7 +415,7 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
                 )}
                 aria-label="List view"
             >
-                <LayoutList className="h-3.5 w-3.5" />
+                <ListIcon size={16} />
             </button>
         </div>
     )
@@ -467,7 +467,7 @@ export function ProjectsPanel({ onOpenProject }: ProjectsPanelProps) {
     if (isLoading) {
         return (
             <div className="flex-1 flex items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <SpinnerGapIcon size={24} className="animate-spin text-muted-foreground" />
             </div>
         )
     }

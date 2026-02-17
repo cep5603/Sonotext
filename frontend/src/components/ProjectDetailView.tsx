@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { Play, Download, FolderOpen, Trash2, Clock, MoreVertical, Loader2, GripVertical, LayoutGrid, LayoutList } from "lucide-react"
+import { PlayIcon, DownloadSimpleIcon, FolderOpenIcon, TrashIcon, ClockIcon, DotsThreeVerticalIcon, SpinnerGapIcon, DotsSixVerticalIcon, SquaresFourIcon, ListIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
     DropdownMenu,
@@ -47,12 +47,12 @@ function GenerationMenu({ gen, onRemove, onShowInExplorer }: {
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
-                    <MoreVertical className="h-3 w-3" />
+                    <DotsThreeVerticalIcon size={16} />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="left">
                 <DropdownMenuItem onClick={onShowInExplorer}>
-                    <FolderOpen className="mr-2 h-3 w-3" /> Show in Explorer
+                    <FolderOpenIcon size={16} className="mr-2" /> Show in Explorer
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => {
                     const a = document.createElement('a')
@@ -60,10 +60,10 @@ function GenerationMenu({ gen, onRemove, onShowInExplorer }: {
                     a.download = gen.filename
                     a.click()
                 }}>
-                    <Download className="mr-2 h-3 w-3" /> Download
+                    <DownloadSimpleIcon size={16} className="mr-2" /> Download
                 </DropdownMenuItem>
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onRemove}>
-                    <Trash2 className="mr-2 h-3 w-3" /> Remove from Project
+                    <TrashIcon size={16} className="mr-2" /> Remove from Project
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
@@ -110,7 +110,7 @@ function SortableGenerationCard({ gen, projectId, projectColor, onSelect, onPlay
                     className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 mt-0.5 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity touch-none self-start"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                    <DotsSixVerticalIcon size={16} className="text-muted-foreground" />
                 </button>
                 <div className="flex-1 min-w-0 space-y-1.5">
                     <h4 className="text-sm font-medium truncate">{formatFilename(gen.filename)}</h4>
@@ -123,7 +123,7 @@ function SortableGenerationCard({ gen, projectId, projectColor, onSelect, onPlay
                         <span>{gen.speed}x</span>
                         <span>•</span>
                         <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3 shrink-0" />
+                            <ClockIcon size={14} className="shrink-0" />
                             {formatDuration(gen.duration)}
                         </span>
                         <span>•</span>
@@ -135,7 +135,7 @@ function SortableGenerationCard({ gen, projectId, projectColor, onSelect, onPlay
                 <Button variant="secondary" size="sm" className="h-7 flex-1 text-xs"
                     onClick={(e) => { e.stopPropagation(); onPlay() }}
                 >
-                    <Play className="mr-2 h-3 w-3" /> Play
+                    <PlayIcon size={16} className="mr-2" /> Play
                 </Button>
                 <GenerationMenu gen={gen} onRemove={onRemove} onShowInExplorer={onShowInExplorer} />
             </div>
@@ -185,7 +185,7 @@ function SortableGenerationTile({ gen, projectId, projectColor, onSelect, onPlay
                         className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 -ml-1 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity touch-none"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                        <DotsSixVerticalIcon size={16} className="text-muted-foreground" />
                     </button>
                     <h4 className="text-sm font-medium truncate">{formatFilename(gen.filename)}</h4>
                 </div>
@@ -202,7 +202,7 @@ function SortableGenerationTile({ gen, projectId, projectColor, onSelect, onPlay
                 <span>{formatVoiceDisplay(gen.voice, gen.voice_profile_id)}</span>
                 <span>•</span>
                 <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3 shrink-0" />
+                    <ClockIcon size={14} className="shrink-0" />
                     {formatDuration(gen.duration)}
                 </span>
             </div>
@@ -211,7 +211,7 @@ function SortableGenerationTile({ gen, projectId, projectColor, onSelect, onPlay
                 <Button variant="secondary" size="sm" className="h-7 w-full text-xs"
                     onClick={(e) => { e.stopPropagation(); onPlay() }}
                 >
-                    <Play className="mr-2 h-3 w-3" /> Play
+                    <PlayIcon size={16} className="mr-2" /> Play
                 </Button>
             </div>
         </div>
@@ -231,7 +231,7 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
                 )}
                 aria-label="Grid view"
             >
-                <LayoutGrid className="h-3.5 w-3.5" />
+                <SquaresFourIcon size={16} />
             </button>
             <button
                 onClick={() => onChange("list")}
@@ -241,7 +241,7 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
                 )}
                 aria-label="List view"
             >
-                <LayoutList className="h-3.5 w-3.5" />
+                <ListIcon size={16} />
             </button>
         </div>
     )
@@ -292,7 +292,7 @@ export function ProjectDetailView({ projectId, projectColor, onSelectGeneration 
     if (isLoading || !project) {
         return (
             <div className="flex-1 flex items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <SpinnerGapIcon size={24} className="animate-spin text-muted-foreground" />
             </div>
         )
     }

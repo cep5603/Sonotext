@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { Loader2, UploadCloud, FileText, ArrowLeft, Clock, Sparkles, ChevronDown, ArrowDownUp, Copy, Check } from "lucide-react"
+import { SpinnerGapIcon, FileArrowUpIcon, FileTextIcon, ArrowLeftIcon, ClockIcon, SparkleIcon, CaretDownIcon, ArrowsDownUpIcon, CopyIcon, CheckIcon } from "@phosphor-icons/react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -550,7 +550,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                         onClick={goToGenerator}
                                         className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                                     >
-                                        <ArrowLeft className="h-3.5 w-3.5" />
+                                        <ArrowLeftIcon size={16} />
                                         Generator
                                     </button>
                                 )}
@@ -566,7 +566,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                                 onClick={goToProjects}
                                                 className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                                             >
-                                                <ArrowLeft className="h-3.5 w-3.5" />
+                                                <ArrowLeftIcon size={16} />
                                                 Projects
                                             </button>
                                         )}
@@ -596,7 +596,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                                 }}
                                                 className="hover:text-foreground transition-colors flex items-center gap-1"
                                             >
-                                                <ArrowLeft className="h-3.5 w-3.5" style={{ color: activeProjectColor || undefined }} />
+                                                <ArrowLeftIcon size={16} style={{ color: activeProjectColor || undefined }} />
                                                 <span style={{ color: activeProjectColor || undefined }} className={activeProjectColor ? 'opacity-70' : 'text-muted-foreground'}>
                                                     {activeProjectName}
                                                 </span>
@@ -642,7 +642,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                             <span>{selectedItem.speed}x</span>
                                             <span>•</span>
                                             <span className="flex items-center gap-1">
-                                                <Clock className="h-3 w-3" />
+                                                <ClockIcon size={16} />
                                                 {formatDuration(selectedItem.duration)}
                                             </span>
                                             <span>•</span>
@@ -659,7 +659,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                                 }}
                                                 className="gap-2 text-xs"
                                             >
-                                                {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                                {copied ? <CheckIcon size={16} /> : <CopyIcon size={16} />}
                                                 {copied ? "Copied!" : "Copy"}
                                             </Button>
                                             <Button
@@ -668,8 +668,8 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                                 onClick={() => setAutoScroll(!autoScroll)}
                                                 className="gap-2 text-xs"
                                             >
-                                                <ArrowDownUp className="h-3 w-3" />
-                                                Auto-scroll {autoScroll ? "On" : "Off"}
+                                                <ArrowsDownUpIcon size={16} />
+                                                <span className="w-[5rem] text-left">{autoScroll ? "Auto-scroll On" : "Auto-scroll Off"}</span>
                                             </Button>
                                         </div>
                                     </div>
@@ -728,7 +728,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                         {isDragging && (
                                             <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
                                                 <div className="text-center space-y-2 animate-bounce">
-                                                    <UploadCloud className="h-10 w-10 mx-auto text-primary" />
+                                                    <FileArrowUpIcon size={48} className="mx-auto text-primary" />
                                                     <p className="text-lg font-medium text-primary">Drop PDF to extract text</p>
                                                 </div>
                                             </div>
@@ -736,7 +736,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
 
                                         {!text && !isDragging && (
                                             <div className="absolute bottom-4 right-4 text-xs text-muted-foreground flex items-center gap-2">
-                                                <FileText className="h-3 w-3" />
+                                                <FileTextIcon size={16} />
                                                 <span>Drag PDF or</span>
                                                 <label className="cursor-pointer hover:text-primary underline">
                                                     browse
@@ -773,7 +773,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                             >
                                                 {isCleaning ? (
                                                     <>
-                                                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                                        <SpinnerGapIcon size={20} className="animate-spin mr-2" />
                                                         Cleaning...
                                                     </>
                                                 ) : (
@@ -788,12 +788,12 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                                         className="h-12 px-2 rounded-l-none border-l border-secondary-foreground/20"
                                                         disabled={!text || isCleaning || isGenerating}
                                                     >
-                                                        <ChevronDown className="h-4 w-4" />
+                                                        <CaretDownIcon size={16} />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuItem onClick={handleCleanText}>
-                                                        <Sparkles className="mr-2 h-4 w-4" />
+                                                        <SparkleIcon size={16} className="mr-2" />
                                                         LLM Clean
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
@@ -808,7 +808,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                             >
                                                 {isGenerating ? (
                                                     <>
-                                                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                                        <SpinnerGapIcon size={20} className="animate-spin mr-2" />
                                                         Synthesizing...
                                                     </>
                                                 ) : (
@@ -822,12 +822,12 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                                         className="h-12 px-2 rounded-l-none border-l border-primary-foreground/20"
                                                         disabled={!text || isGenerating || isCleaning}
                                                     >
-                                                        <ChevronDown className="h-4 w-4" />
+                                                        <CaretDownIcon size={16} />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuItem onClick={handleCleanAndGenerate}>
-                                                        <Sparkles className="mr-2 h-4 w-4" />
+                                                        <SparkleIcon size={16} className="mr-2" />
                                                         LLM Clean & Generate
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
@@ -859,7 +859,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
 
                                     {pdfMutation.isPending && (
                                         <div className="flex items-center justify-center gap-2 text-muted-foreground animate-pulse flex-shrink-0">
-                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <SpinnerGapIcon size={16} className="animate-spin" />
                                             <span>Extracting text from PDF...</span>
                                         </div>
                                     )}

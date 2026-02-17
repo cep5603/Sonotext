@@ -20,18 +20,18 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import {
-    GripVertical,
-    Play,
-    Pause,
-    Trash2,
-    SquarePen,
-    Check,
-    X,
-    Loader2,
-    Mic,
-    Palette,
-    Plus,
-} from "lucide-react"
+    DotsSixVerticalIcon,
+    PlayIcon,
+    PauseIcon,
+    TrashIcon,
+    PencilSimpleIcon,
+    CheckIcon,
+    XIcon,
+    SpinnerGapIcon,
+    MicrophoneIcon,
+    PaletteIcon,
+    PlusIcon,
+} from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -153,7 +153,7 @@ const SortableVoiceItem = memo(function SortableVoiceItem({
                 className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-muted-foreground hover:text-foreground touch-none"
                 aria-label="Reorder voice"
             >
-                <GripVertical className="h-4 w-4" />
+                <DotsSixVerticalIcon size={16} />
             </button>
 
             {/* Voice info */}
@@ -181,7 +181,7 @@ const SortableVoiceItem = memo(function SortableVoiceItem({
                             )}
                         />
                         {isRenaming ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            <SpinnerGapIcon size={16} className="animate-spin text-muted-foreground" />
                         ) : (
                             <>
                                 <button
@@ -189,14 +189,14 @@ const SortableVoiceItem = memo(function SortableVoiceItem({
                                     onClick={confirmRename}
                                     className="p-1 hover:bg-accent rounded"
                                 >
-                                    <Check className="h-4 w-4 text-green-500" />
+                                    <CheckIcon size={16} className="text-green-500" />
                                 </button>
                                 <button
                                     type="button"
                                     onClick={cancelEditing}
                                     className="p-1 hover:bg-accent rounded"
                                 >
-                                    <X className="h-4 w-4 text-muted-foreground" />
+                                    <XIcon size={16} className="text-muted-foreground" />
                                 </button>
                             </>
                         )}
@@ -205,9 +205,9 @@ const SortableVoiceItem = memo(function SortableVoiceItem({
                     <>
                         <div className="flex items-center gap-2">
                             {profile.source === "designed" ? (
-                                <Palette className="h-4 w-4 shrink-0 text-purple-500" />
+                                <PaletteIcon size={16} className="shrink-0 text-purple-500" />
                             ) : (
-                                <Mic className="h-4 w-4 shrink-0 text-blue-500" />
+                                <MicrophoneIcon size={16} className="shrink-0 text-blue-500" />
                             )}
                             <span className="font-medium truncate">{profile.name}</span>
                             {isSelected && (
@@ -238,9 +238,9 @@ const SortableVoiceItem = memo(function SortableVoiceItem({
                     title="Preview voice"
                 >
                     {isPlaying ? (
-                        <Pause className="h-3.5 w-3.5" />
+                        <PauseIcon size={16} />
                     ) : (
-                        <Play className="h-3.5 w-3.5" />
+                        <PlayIcon size={16} />
                     )}
                 </Button>
                 <Button
@@ -251,7 +251,7 @@ const SortableVoiceItem = memo(function SortableVoiceItem({
                     disabled={isEditing}
                     title="Rename"
                 >
-                    <SquarePen className="h-3.5 w-3.5" />
+                    <PencilSimpleIcon size={16} />
                 </Button>
                 <Button
                     variant="ghost"
@@ -263,7 +263,7 @@ const SortableVoiceItem = memo(function SortableVoiceItem({
                     }}
                     title="Delete"
                 >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <TrashIcon size={16} />
                 </Button>
             </div>
         </div>
@@ -277,14 +277,14 @@ function VoiceItemOverlay({ profile }: { profile: VoiceProfile }) {
             className="flex items-center gap-2 px-3 py-2.5 rounded-lg border bg-card border-primary shadow-lg"
         >
             <div className="p-1 -ml-1 text-muted-foreground">
-                <GripVertical className="h-4 w-4" />
+                <DotsSixVerticalIcon size={16} />
             </div>
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                     {profile.source === "designed" ? (
-                        <Palette className="h-4 w-4 shrink-0 text-purple-500" />
+                        <PaletteIcon size={16} className="shrink-0 text-purple-500" />
                     ) : (
-                        <Mic className="h-4 w-4 shrink-0 text-blue-500" />
+                        <MicrophoneIcon size={16} className="shrink-0 text-blue-500" />
                     )}
                     <span className="font-medium truncate">{profile.name}</span>
                 </div>
@@ -452,7 +452,7 @@ export function VoiceManagerDialog({
                                 onCreateVoice()
                             }}
                         >
-                            <Plus className="h-4 w-4 mr-2" />
+                            <PlusIcon size={16} className="mr-2" />
                             Add Voice
                         </Button>
                     </DialogHeader>
@@ -461,7 +461,7 @@ export function VoiceManagerDialog({
                     <ScrollArea className="h-[50vh] pr-4">
                         {isLoading ? (
                             <div className="flex items-center justify-center py-8">
-                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                <SpinnerGapIcon size={24} className="animate-spin text-muted-foreground" />
                             </div>
                         ) : profiles && profiles.length > 0 ? (
                             <DndContext
@@ -527,9 +527,9 @@ export function VoiceManagerDialog({
                             onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
                         >
                             {deleteMutation.isPending ? (
-                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                <SpinnerGapIcon size={16} className="animate-spin mr-2" />
                             ) : (
-                                <Trash2 className="h-4 w-4 mr-2" />
+                                <TrashIcon size={16} className="mr-2" />
                             )}
                             Delete
                         </AlertDialogAction>

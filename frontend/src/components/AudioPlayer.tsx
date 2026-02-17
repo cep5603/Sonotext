@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import WaveSurfer from "wavesurfer.js"
-import { Play, Pause, Download } from "lucide-react"
+import { PlayIcon, PauseIcon, DownloadSimpleIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 
 interface AudioPlayerProps {
@@ -248,10 +248,10 @@ export function AudioPlayer({
             {/* Controls */}
             <div className="flex justify-center gap-4">
                 <Button variant="outline" size="icon" onClick={togglePlay} disabled={!isReady}>
-                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    {isPlaying ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
                 </Button>
                 <Button variant="outline" size="icon" onClick={handleDownload}>
-                    <Download className="h-4 w-4" />
+                    <DownloadSimpleIcon size={16} />
                 </Button>
             </div>
         </div>

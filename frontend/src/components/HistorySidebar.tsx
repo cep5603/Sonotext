@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { MoreVertical, Play, Trash2, Download, Clock, FolderOpen, SquarePen, Loader2, Check, X, Wand2, TriangleAlert, Search } from "lucide-react"
+import { DotsThreeVerticalIcon, PlayIcon, TrashIcon, DownloadSimpleIcon, ClockIcon, FolderOpenIcon, PencilSimpleIcon, SpinnerGapIcon, CheckIcon, XIcon, MagicWandIcon, WarningIcon, MagnifyingGlassIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -133,7 +133,7 @@ function EditableTitle({
                     )}
                 />
                 {isRenaming ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-muted-foreground" />
+                    <SpinnerGapIcon size={16} className="animate-spin shrink-0 text-muted-foreground" />
                 ) : (
                     <>
                         <button
@@ -141,14 +141,14 @@ function EditableTitle({
                             onClick={confirmRename}
                             className="p-0.5 hover:bg-accent rounded shrink-0"
                         >
-                            <Check className="h-3.5 w-3.5 text-green-500" />
+                            <CheckIcon size={16} className="text-green-500" />
                         </button>
                         <button
                             type="button"
                             onClick={cancelEditing}
                             className="p-0.5 hover:bg-accent rounded shrink-0"
                         >
-                            <X className="h-3.5 w-3.5 text-muted-foreground" />
+                            <XIcon size={16} className="text-muted-foreground" />
                         </button>
                     </>
                 )}
@@ -191,11 +191,11 @@ function EditableTitle({
                 title={!llmAvailable ? "LLM not available" : hasAutoRenameError ? "Auto-rename failed" : "Auto-rename with AI"}
             >
                 {isAutoRenaming ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                    <SpinnerGapIcon size={16} className="animate-spin text-muted-foreground" />
                 ) : hasAutoRenameError ? (
-                    <TriangleAlert className="h-3.5 w-3.5 text-amber-500" />
+                    <WarningIcon size={16} className="text-amber-500" />
                 ) : (
-                    <Wand2 className={cn(
+                    <MagicWandIcon className={cn(
                         "h-3.5 w-3.5",
                         llmAvailable ? "text-muted-foreground hover:text-foreground" : "text-muted-foreground/40"
                     )} />
@@ -211,7 +211,7 @@ function EditableTitle({
                 )}
                 title="Rename"
             >
-                <SquarePen className="h-3.5 w-3.5 text-muted-foreground" />
+                <PencilSimpleIcon size={16} className="text-muted-foreground" />
             </button>
         </div>
     )
@@ -411,7 +411,7 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
             <div className="p-4 border-b border-border shrink-0 flex items-center gap-3">
                 <h2 className="font-semibold tracking-tight shrink-0">History</h2>
                 <div className="relative flex-1">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <MagnifyingGlassIcon size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                     <Input
                         type="text"
                         placeholder="Search..."
@@ -427,7 +427,7 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
                             className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-accent rounded"
                             aria-label="Clear search"
                         >
-                            <X className="h-3.5 w-3.5 text-muted-foreground" />
+                            <XIcon size={16} className="text-muted-foreground" />
                         </button>
                     )}
                 </div>
@@ -457,7 +457,7 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
                                     <span>{item.speed}x</span>
                                     <span>•</span>
                                     <span className="flex items-center gap-1">
-                                        <Clock className="h-3 w-3 shrink-0" />
+                                        <ClockIcon size={14} className="shrink-0" />
                                         {formatDuration(item.duration)}
                                     </span>
                                     <span>•</span>
@@ -475,19 +475,19 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
                                         onSelectItem(item, true)
                                     }}
                                 >
-                                    <Play className="mr-2 h-3 w-3" />
+                                    <PlayIcon size={16} className="mr-2" />
                                     Play
                                 </Button>
 
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
-                                            <MoreVertical className="h-3 w-3" />
+                                            <DotsThreeVerticalIcon size={16} />
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" side="left">
                                         <DropdownMenuItem onClick={() => handleShowInExplorer(item.filename)}>
-                                            <FolderOpen className="mr-2 h-3 w-3" /> Show in Explorer
+                                            <FolderOpenIcon size={16} className="mr-2" /> Show in Explorer
                                         </DropdownMenuItem>
                                         <DropdownMenuItem onClick={() => {
                                             const a = document.createElement('a')
@@ -495,13 +495,13 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
                                             a.download = item.filename
                                             a.click()
                                         }}>
-                                            <Download className="mr-2 h-3 w-3" /> Download
+                                            <DownloadSimpleIcon size={16} className="mr-2" /> Download
                                         </DropdownMenuItem>
                                         <DropdownMenuItem
                                             className="text-destructive focus:text-destructive"
                                             onClick={() => deleteMutation.mutate(item.id)}
                                         >
-                                            <Trash2 className="mr-2 h-3 w-3" /> Delete
+                                            <TrashIcon size={16} className="mr-2" /> Delete
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>

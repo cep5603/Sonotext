@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { Loader2, Power, Circle, RefreshCw, Zap, Sparkles, Mic, Palette, ChevronDown, Check } from "lucide-react"
+import { SpinnerGapIcon, PowerIcon, CircleIcon, ArrowsClockwiseIcon, LightningIcon, SparkleIcon, MicrophoneIcon, PaletteIcon, CaretDownIcon, CheckIcon } from "@phosphor-icons/react"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
@@ -110,7 +110,7 @@ function Qwen3ModelStatus() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center p-2">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <SpinnerGapIcon size={16} className="animate-spin text-muted-foreground" />
             </div>
         )
     }
@@ -119,7 +119,7 @@ function Qwen3ModelStatus() {
         <div className="p-3 rounded-lg border border-border bg-muted/30 space-y-2">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm">
-                    <Circle className={cn(
+                    <CircleIcon className={cn(
                         "h-2.5 w-2.5 fill-current",
                         isModelLoaded ? "text-green-500" : "text-muted-foreground"
                     )} />
@@ -138,10 +138,10 @@ function Qwen3ModelStatus() {
                         disabled={unloadMutation.isPending}
                     >
                         {unloadMutation.isPending ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <SpinnerGapIcon size={16} className="animate-spin" />
                         ) : (
                             <>
-                                <Power className="h-3 w-3 mr-1" />
+                                <PowerIcon size={16} className="mr-1" />
                                 Unload
                             </>
                         )}
@@ -157,7 +157,7 @@ function Qwen3ModelStatus() {
                 >
                     {loadMutation.isPending ? (
                         <>
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                            <SpinnerGapIcon size={16} className="animate-spin mr-1" />
                             Loading...
                         </>
                     ) : (
@@ -247,7 +247,7 @@ function Qwen3VoiceSelector({
                     className="w-full justify-between font-normal px-3"
                 >
                     <span className="truncate">{getDisplayLabel()}</span>
-                    <ChevronDown className={cn(
+                    <CaretDownIcon className={cn(
                         "h-4 w-4 shrink-0 opacity-50 transition-transform duration-200",
                         open && "rotate-180"
                     )} />
@@ -296,7 +296,7 @@ function Qwen3VoiceSelector({
                                             {speaker.name}
                                         </span>
                                         {!voiceProfileId && voice === speaker.id && (
-                                            <Check className="w-4 h-4 text-primary shrink-0" />
+                                            <CheckIcon size={16} className="text-primary shrink-0" />
                                         )}
                                     </button>
                                 ))}
@@ -320,15 +320,15 @@ function Qwen3VoiceSelector({
                                             )}
                                         >
                                             {profile.source === "designed" ? (
-                                                <Palette className="h-4 w-4 text-purple-500 shrink-0" />
+                                                <PaletteIcon size={16} className="text-purple-500 shrink-0" />
                                             ) : (
-                                                <Mic className="h-4 w-4 text-blue-500 shrink-0" />
+                                                <MicrophoneIcon size={16} className="text-blue-500 shrink-0" />
                                             )}
                                             <span className="flex-1 text-left text-sm font-medium truncate">
                                                 {profile.name}
                                             </span>
                                             {voiceProfileId === profile.id && (
-                                                <Check className="w-4 h-4 text-primary shrink-0" />
+                                                <CheckIcon size={16} className="text-primary shrink-0" />
                                             )}
                                         </button>
                                     ))
@@ -425,13 +425,13 @@ export function SettingsSidebar({
                             <SelectContent>
                                 <SelectItem value="kokoro">
                                     <div className="flex items-center gap-2">
-                                        <Zap className="h-3.5 w-3.5 text-yellow-500" />
+                                        <LightningIcon size={16} className="text-yellow-500" />
                                         <span>Kokoro</span>
                                     </div>
                                 </SelectItem>
                                 <SelectItem value="qwen3">
                                     <div className="flex items-center gap-2">
-                                        <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+                                        <SparkleIcon size={16} className="text-purple-500" />
                                         <span>Qwen3-TTS</span>
                                     </div>
                                 </SelectItem>
@@ -557,7 +557,7 @@ export function SettingsSidebar({
                                 }}
                                 title="Refresh LLM status"
                             >
-                                <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                                <ArrowsClockwiseIcon size={16} className="text-muted-foreground" />
                             </Button>
                         </div>
                         <LLMModelSelector />
@@ -567,9 +567,9 @@ export function SettingsSidebar({
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-sm">
                             {status === "loading" ? (
-                                <Loader2 className={cn("h-3 w-3 animate-spin", statusColor)} />
+                                <SpinnerGapIcon className={cn("animate-spin", statusColor)} />
                             ) : (
-                                <Circle className={cn("h-3 w-3 fill-current", statusColor)} />
+                                <CircleIcon className={cn("fill-current", statusColor)} />
                             )}
                             <span className={statusColor}>{statusLabel}</span>
                         </div>
@@ -582,10 +582,10 @@ export function SettingsSidebar({
                                 disabled={unloadMutation.isPending}
                             >
                                 {unloadMutation.isPending ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <SpinnerGapIcon size={16} className="animate-spin" />
                                 ) : (
                                     <>
-                                        <Power className="h-3 w-3 mr-1" />
+                                        <PowerIcon size={16} className="mr-1" />
                                         Unload
                                     </>
                                 )}
