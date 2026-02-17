@@ -39,6 +39,7 @@ interface TextToSpeechProps {
 }
 
 export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGeneratorToken }: TextToSpeechProps) {
+    const CANCEL_CONFIRMATION_MS = 2500
     const [text, setText] = useState("")
     const [voice, setVoice] = useState("af_heart")
     const [lang, setLang] = useState<string | null>(null)  // null = auto-detect
@@ -69,6 +70,10 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
     const [seekToTime, setSeekToTime] = useState<number | null>(null)
     const [autoScroll, setAutoScroll] = useState(true)
     const [copied, setCopied] = useState(false)
+    const [cancelConfirmTarget, setCancelConfirmTarget] = useState<"generate" | "clean" | null>(null)
+    const cancelConfirmTimeoutRef = useRef<number | null>(null)
+    const generateAbortControllerRef = useRef<AbortController | null>(null)
+    const cleanupAbortControllerRef = useRef<AbortController | null>(null)
     const queryClient = useQueryClient()
 
     // View state
@@ -243,6 +248,33 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
         }
     }, [isCleaning, cleanupProgress])
 
+    const resetCancelConfirmation = useCallback(() => {
+        if (cancelConfirmTimeoutRef.current !== null) {
+            window.clearTimeout(cancelConfirmTimeoutRef.current)
+            cancelConfirmTimeoutRef.current = null
+        }
+        setCancelConfirmTarget(null)
+    }, [])
+
+    const armCancelConfirmation = useCallback((target: "generate" | "clean") => {
+        if (cancelConfirmTimeoutRef.current !== null) {
+            window.clearTimeout(cancelConfirmTimeoutRef.current)
+        }
+        setCancelConfirmTarget(target)
+        cancelConfirmTimeoutRef.current = window.setTimeout(() => {
+            setCancelConfirmTarget((current) => (current === target ? null : current))
+            cancelConfirmTimeoutRef.current = null
+        }, CANCEL_CONFIRMATION_MS)
+    }, [CANCEL_CONFIRMATION_MS])
+
+    useEffect(() => {
+        return () => {
+            if (cancelConfirmTimeoutRef.current !== null) {
+                window.clearTimeout(cancelConfirmTimeoutRef.current)
+            }
+        }
+    }, [])
+
     const handleGenerate = useCallback(async () => {
         setIsGenerating(true)
         setProgress(0)
@@ -251,11 +283,14 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
         setGenerationStats(null)
         const startTime = performance.now()
         let totalChunks = 0
+        const abortController = new AbortController()
+        generateAbortControllerRef.current = abortController
 
         try {
             const response = await fetch("http://localhost:8000/api/generate", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                signal: abortController.signal,
                 body: JSON.stringify({
                     text,
                     voice,
@@ -310,13 +345,19 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                 }
             }
         } catch (e) {
+            if (e instanceof DOMException && e.name === "AbortError") {
+                setProgressText("Generation canceled")
+                return
+            }
             setError(e instanceof Error ? e.message : "Generation failed")
         } finally {
+            generateAbortControllerRef.current = null
+            setCancelConfirmTarget((current) => (current === "generate" ? null : current))
             setIsGenerating(false)
         }
     }, [text, voice, lang, speed, engine, instruct, voiceProfileId, chunkSize, queryClient])
 
-    const handleCleanText = useCallback(async () => {
+    const handleCleanText = useCallback(async (): Promise<boolean> => {
         setIsCleaning(true)
         setCleanupProgress(0)
         setCleanupProgressText("Starting cleanup...")
@@ -324,11 +365,15 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
         setCleanupStats(null)
         const startTime = performance.now()
         let totalChunks = 0
+        let cleanupSucceeded = false
+        const abortController = new AbortController()
+        cleanupAbortControllerRef.current = abortController
 
         try {
             const response = await fetch("http://localhost:8000/api/cleanup-text", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                signal: abortController.signal,
                 body: JSON.stringify({ text }),
             })
 
@@ -364,35 +409,63 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                             setText(data.text)
                             setCleanupProgress(100)
                             setCleanupProgressText("Complete!")
+                            cleanupSucceeded = true
                         } else if (data.error) {
                             throw new Error(data.error)
                         }
                     }
                 }
             }
+            return cleanupSucceeded
         } catch (e) {
+            if (e instanceof DOMException && e.name === "AbortError") {
+                setCleanupProgressText("Cleanup canceled")
+                return false
+            }
             setError(e instanceof Error ? e.message : "Cleanup failed")
+            return false
         } finally {
+            cleanupAbortControllerRef.current = null
+            setCancelConfirmTarget((current) => (current === "clean" ? null : current))
             setIsCleaning(false)
         }
     }, [text])
 
-    // Ref to track if we should generate after cleaning
-    const generateAfterCleanRef = useRef(false)
+    const handleGenerateButtonClick = useCallback(() => {
+        if (isGenerating) {
+            if (cancelConfirmTarget === "generate") {
+                setProgressText("Canceling synthesis...")
+                generateAbortControllerRef.current?.abort()
+                resetCancelConfirmation()
+                return
+            }
+            armCancelConfirmation("generate")
+            return
+        }
+        handleGenerate()
+    }, [armCancelConfirmation, cancelConfirmTarget, handleGenerate, isGenerating, resetCancelConfirmation])
+
+    const handleCleanButtonClick = useCallback(() => {
+        if (isCleaning) {
+            if (cancelConfirmTarget === "clean") {
+                setCleanupProgressText("Canceling cleanup...")
+                cleanupAbortControllerRef.current?.abort()
+                resetCancelConfirmation()
+                return
+            }
+            armCancelConfirmation("clean")
+            return
+        }
+        setText(text.replace(/[*#]/g, ''))
+    }, [armCancelConfirmation, cancelConfirmTarget, isCleaning, resetCancelConfirmation, text])
 
     const handleCleanAndGenerate = useCallback(async () => {
-        generateAfterCleanRef.current = true
-        await handleCleanText()
-    }, [handleCleanText])
-
-    // Effect to trigger generation after cleaning completes
-    const prevIsCleaningRef = useRef(isCleaning)
-    if (prevIsCleaningRef.current && !isCleaning && generateAfterCleanRef.current) {
-        generateAfterCleanRef.current = false
-        // Schedule generation for next tick to avoid state conflicts
-        setTimeout(() => handleGenerate(), 0)
-    }
-    prevIsCleaningRef.current = isCleaning
+        const cleanupSucceeded = await handleCleanText()
+        if (!cleanupSucceeded) return
+        window.setTimeout(() => {
+            handleGenerate()
+        }, 0)
+    }, [handleCleanText, handleGenerate])
 
     const pdfMutation = useMutation({
         mutationFn: async (file: File) => {
@@ -765,17 +838,14 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                     <div className="flex justify-end gap-3 flex-shrink-0">
                                         <div className="flex">
                                             <Button
-                                                variant="secondary"
+                                                variant={isCleaning && cancelConfirmTarget === "clean" ? "destructive" : "secondary"}
                                                 size="lg"
                                                 className="h-12 text-lg rounded-r-none"
-                                                onClick={() => setText(text.replace(/[*#]/g, ''))}
-                                                disabled={!text || isCleaning || isGenerating}
+                                                onClick={handleCleanButtonClick}
+                                                disabled={isGenerating || (!text && !isCleaning)}
                                             >
                                                 {isCleaning ? (
-                                                    <>
-                                                        <SpinnerGapIcon size={20} className="animate-spin mr-2" />
-                                                        Cleaning...
-                                                    </>
+                                                    cancelConfirmTarget === "clean" ? "Confirm Cancel" : "Cancel"
                                                 ) : (
                                                     "Clean Text"
                                                 )}
@@ -803,14 +873,12 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                             <Button
                                                 size="lg"
                                                 className="min-w-[160px] text-lg h-12 rounded-r-none"
-                                                onClick={handleGenerate}
-                                                disabled={!text || isGenerating || isCleaning}
+                                                variant={isGenerating && cancelConfirmTarget === "generate" ? "destructive" : "default"}
+                                                onClick={handleGenerateButtonClick}
+                                                disabled={isCleaning || (!text && !isGenerating)}
                                             >
                                                 {isGenerating ? (
-                                                    <>
-                                                        <SpinnerGapIcon size={20} className="animate-spin mr-2" />
-                                                        Synthesizing...
-                                                    </>
+                                                    cancelConfirmTarget === "generate" ? "Confirm Cancel" : "Cancel"
                                                 ) : (
                                                     "Generate Audio"
                                                 )}
