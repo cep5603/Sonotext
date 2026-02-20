@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react"
+import { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
 import { DotsThreeVerticalIcon, PlayIcon, TrashIcon, DownloadSimpleIcon, ClockIcon, FolderOpenIcon, PencilSimpleIcon, SpinnerGapIcon, CheckIcon, XIcon, MagicWandIcon, WarningIcon, MagnifyingGlassIcon, FunnelIcon } from "@phosphor-icons/react"
@@ -309,17 +309,36 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
     })
 
     // Build profile ID to name map for fast lookup
-    const profileNameMap = new Map<string, string>()
-    voiceProfiles?.forEach((p) => profileNameMap.set(p.id, p.name))
+    const profileNameMap = useMemo(() => {
+        const map = new Map<string, string>()
+        voiceProfiles?.forEach((p) => map.set(p.id, p.name))
+        return map
+    }, [voiceProfiles])
 
     // Resolve voice display: check profile ID first, fallback to stored voice
-    const getVoiceDisplayName = (item: HistoryItem) => {
+    const getVoiceDisplayName = useCallback((item: HistoryItem) => {
         if (item.voice_profile_id) {
             const currentName = profileNameMap.get(item.voice_profile_id)
             if (currentName) return `🎤 ${currentName}`
         }
         return formatVoiceDisplay(item.voice, item.voice_profile_id)
-    }
+    }, [profileNameMap])
+
+    // Pre-calculate expensive string normalization for text search: O(Keystrokes * HistorySize) --> O(1 * HistorySize)
+    const normalizedHistoryIndex = useMemo(() => {
+        if (!history) return new Map<string, string>()
+
+        const index = new Map<string, string>()
+        for (const item of history) {
+            const title = normalizeForSearch(formatFilenameDisplay(item.filename))
+            const text = normalizeForSearch(item.text)
+            const voice = normalizeForSearch(getVoiceDisplayName(item))
+            const model = normalizeForSearch(item.model ?? "")
+            // Concat all searchable fields w/ a delimiter for a single .includes() check
+            index.set(item.id, `${title} | ${text} | ${voice} | ${model}`)
+        }
+        return index
+    }, [history, getVoiceDisplayName])
 
     // Filter history based on search query + project filter (AND-composed)
     const filteredHistory = useMemo(() => {
@@ -336,24 +355,15 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
         const normalizedQuery = normalizeForSearch(searchQuery)
         if (normalizedQuery) {
             items = items.filter((item) => {
-                const title = normalizeForSearch(formatFilenameDisplay(item.filename))
-                const text = normalizeForSearch(item.text)
-                const voice = normalizeForSearch(getVoiceDisplayName(item))
-                const model = normalizeForSearch(item.model ?? "")
-
-                return (
-                    title.includes(normalizedQuery) ||
-                    text.includes(normalizedQuery) ||
-                    voice.includes(normalizedQuery) ||
-                    model.includes(normalizedQuery)
-                )
+                const searchableText = normalizedHistoryIndex.get(item.id)
+                return searchableText ? searchableText.includes(normalizedQuery) : false
             })
         }
 
         return items
-    }, [history, searchQuery, profileNameMap, selectedGenerationIds])
+    }, [history, searchQuery, selectedGenerationIds, normalizedHistoryIndex])
 
-    const toggleProject = (projectId: string) => {
+    const toggleProject = useCallback((projectId: string) => {
         setSelectedProjectIds((prev) => {
             const next = new Set(prev)
             if (next.has(projectId)) {
@@ -363,11 +373,11 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
             }
             return next
         })
-    }
+    }, [])
 
-    const clearProjectFilter = () => {
+    const clearProjectFilter = useCallback(() => {
         setSelectedProjectIds(new Set())
-    }
+    }, [])
 
     const deleteMutation = useMutation({
         mutationFn: async (id: string) => {
@@ -480,7 +490,7 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
                         </button>
                     )}
                 </div>
-                {/* Project filter funnel */}
+                {/* Project filter */}
                 <Popover>
                     <PopoverTrigger asChild>
                         <button
@@ -494,7 +504,7 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
                             aria-label={filterCount > 0 ? `Filter by project (${filterCount} active)` : "Filter by project"}
                             aria-haspopup="listbox"
                         >
-                            <FunnelIcon size={18} weight={filterCount > 0 ? "fill" : "regular"} />
+                            <FunnelIcon size={20} weight={filterCount > 0 ? "fill" : "regular"} />
                             {filterCount > 0 && (
                                 <span aria-hidden="true" className="absolute -top-1 -right-1 flex items-center justify-center h-4 min-w-4 px-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-none">
                                     {filterCount}
