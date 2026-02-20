@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { DotsThreeVerticalIcon, PlayIcon, TrashIcon, DownloadSimpleIcon, ClockIcon, FolderOpenIcon, PencilSimpleIcon, SpinnerGapIcon, CheckIcon, XIcon, MagicWandIcon, WarningIcon, MagnifyingGlassIcon } from "@phosphor-icons/react"
+import { DotsThreeVerticalIcon, PlayIcon, TrashIcon, DownloadSimpleIcon, ClockIcon, FolderOpenIcon, PencilSimpleIcon, SpinnerGapIcon, CheckIcon, XIcon, MagicWandIcon, WarningIcon, MagnifyingGlassIcon, FunnelIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -10,10 +10,11 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { useDraggable } from "@dnd-kit/core"
 import { formatVoiceDisplay } from "@/lib/voiceData"
-import type { HistoryItem, VoiceProfile } from "@/types"
+import type { HistoryItem, VoiceProfile, Project } from "@/types"
 
 interface HistorySidebarProps {
     onSelectItem: (item: HistoryItem, autoplay?: boolean) => void
@@ -256,6 +257,7 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
     const [autoRenamingIds, setAutoRenamingIds] = useState<Set<string>>(new Set())
     const [autoRenameErrors, setAutoRenameErrors] = useState<Set<string>>(new Set())
     const [searchQuery, setSearchQuery] = useState("")
+    const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set())
 
     // Query LLM availability
     const { data: llmStatus } = useQuery({
@@ -276,6 +278,26 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
             return res.data as HistoryItem[]
         },
     })
+
+    // Fetch projects for filter
+    const { data: projects = [] } = useQuery<Project[]>({
+        queryKey: ["projects"],
+        queryFn: () => axios.get("http://localhost:8000/api/projects").then((r) => r.data),
+    })
+
+    // Build set of generation IDs belonging to selected projects
+    const selectedGenerationIds = useMemo(() => {
+        if (selectedProjectIds.size === 0) return null // null = no filter
+        const ids = new Set<string>()
+        for (const project of projects) {
+            if (selectedProjectIds.has(project.id)) {
+                for (const gid of project.generation_ids) {
+                    ids.add(gid)
+                }
+            }
+        }
+        return ids
+    }, [selectedProjectIds, projects])
 
     // Fetch voice profiles for name resolution
     const { data: voiceProfiles } = useQuery({
@@ -299,28 +321,53 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
         return formatVoiceDisplay(item.voice, item.voice_profile_id)
     }
 
-    // Filter history based on search query (normalized matching)
+    // Filter history based on search query + project filter (AND-composed)
     const filteredHistory = useMemo(() => {
         if (!history) return []
-        if (!searchQuery.trim()) return history
 
+        let items = history
+
+        // Project filter: keep items belonging to any selected project
+        if (selectedGenerationIds) {
+            items = items.filter((item) => selectedGenerationIds.has(item.id))
+        }
+
+        // Text search filter
         const normalizedQuery = normalizeForSearch(searchQuery)
-        if (!normalizedQuery) return history
+        if (normalizedQuery) {
+            items = items.filter((item) => {
+                const title = normalizeForSearch(formatFilenameDisplay(item.filename))
+                const text = normalizeForSearch(item.text)
+                const voice = normalizeForSearch(getVoiceDisplayName(item))
+                const model = normalizeForSearch(item.model ?? "")
 
-        return history.filter((item) => {
-            const title = normalizeForSearch(formatFilenameDisplay(item.filename))
-            const text = normalizeForSearch(item.text)
-            const voice = normalizeForSearch(getVoiceDisplayName(item))
-            const model = normalizeForSearch(item.model ?? "")
+                return (
+                    title.includes(normalizedQuery) ||
+                    text.includes(normalizedQuery) ||
+                    voice.includes(normalizedQuery) ||
+                    model.includes(normalizedQuery)
+                )
+            })
+        }
 
-            return (
-                title.includes(normalizedQuery) ||
-                text.includes(normalizedQuery) ||
-                voice.includes(normalizedQuery) ||
-                model.includes(normalizedQuery)
-            )
+        return items
+    }, [history, searchQuery, profileNameMap, selectedGenerationIds])
+
+    const toggleProject = (projectId: string) => {
+        setSelectedProjectIds((prev) => {
+            const next = new Set(prev)
+            if (next.has(projectId)) {
+                next.delete(projectId)
+            } else {
+                next.add(projectId)
+            }
+            return next
         })
-    }, [history, searchQuery, profileNameMap])
+    }
+
+    const clearProjectFilter = () => {
+        setSelectedProjectIds(new Set())
+    }
 
     const deleteMutation = useMutation({
         mutationFn: async (id: string) => {
@@ -406,6 +453,8 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
         }
     }
 
+    const filterCount = selectedProjectIds.size
+
     return (
         <div className="w-[26rem] border-l border-border bg-card/50 backdrop-blur-sm h-full flex flex-col shrink-0">
             <div className="p-4 border-b border-border shrink-0 flex items-center gap-3">
@@ -431,6 +480,109 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
                         </button>
                     )}
                 </div>
+                {/* Project filter funnel */}
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <button
+                            type="button"
+                            className={cn(
+                                "relative shrink-0 p-1.5 rounded-md transition-colors",
+                                filterCount > 0
+                                    ? "bg-primary/10 text-primary hover:bg-primary/20"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                            )}
+                            aria-label={filterCount > 0 ? `Filter by project (${filterCount} active)` : "Filter by project"}
+                            aria-haspopup="listbox"
+                        >
+                            <FunnelIcon size={18} weight={filterCount > 0 ? "fill" : "regular"} />
+                            {filterCount > 0 && (
+                                <span aria-hidden="true" className="absolute -top-1 -right-1 flex items-center justify-center h-4 min-w-4 px-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-none">
+                                    {filterCount}
+                                </span>
+                            )}
+                        </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-56 p-0">
+                        <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+                            <span id="filter-label" className="text-xs font-medium text-muted-foreground">Filter by Project</span>
+                            {filterCount > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={clearProjectFilter}
+                                    className="text-xs text-primary hover:underline"
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                        <div
+                            role="listbox"
+                            aria-labelledby="filter-label"
+                            aria-multiselectable="true"
+                            className="max-h-60 overflow-y-auto py-1"
+                            onKeyDown={(e) => {
+                                const items = Array.from(
+                                    e.currentTarget.querySelectorAll<HTMLElement>('[role="option"]')
+                                )
+                                const idx = items.indexOf(e.target as HTMLElement)
+                                if (idx === -1) return
+
+                                let next = -1
+                                if (e.key === "ArrowDown") {
+                                    next = idx < items.length - 1 ? idx + 1 : 0
+                                } else if (e.key === "ArrowUp") {
+                                    next = idx > 0 ? idx - 1 : items.length - 1
+                                } else if (e.key === "Home") {
+                                    next = 0
+                                } else if (e.key === "End") {
+                                    next = items.length - 1
+                                }
+
+                                if (next !== -1) {
+                                    e.preventDefault()
+                                    items[next].focus()
+                                }
+                            }}
+                        >
+                            {projects.length === 0 ? (
+                                <p className="px-3 py-4 text-xs text-muted-foreground text-center">No projects yet</p>
+                            ) : (
+                                projects.map((project) => {
+                                    const isSelected = selectedProjectIds.has(project.id)
+                                    return (
+                                        <button
+                                            key={project.id}
+                                            type="button"
+                                            role="option"
+                                            aria-selected={isSelected}
+                                            onClick={() => toggleProject(project.id)}
+                                            className={cn(
+                                                "flex items-center gap-2.5 w-full px-3 py-1.5 text-left text-sm transition-colors",
+                                                "hover:bg-accent focus-visible:bg-accent outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                                                isSelected && "bg-accent/50"
+                                            )}
+                                        >
+                                            <span
+                                                className="flex-1 truncate font-medium"
+                                                style={{ color: project.color || undefined }}
+                                            >
+                                                {project.name}
+                                            </span>
+                                            {isSelected && (
+                                                <CheckIcon
+                                                    size={14}
+                                                    aria-hidden="true"
+                                                    className="shrink-0"
+                                                    style={{ color: project.color || "hsl(var(--primary))" }}
+                                                />
+                                            )}
+                                        </button>
+                                    )
+                                })
+                            )}
+                        </div>
+                    </PopoverContent>
+                </Popover>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {filteredHistory.map((item) => {

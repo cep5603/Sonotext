@@ -19,14 +19,14 @@ import type { Project } from "@/types"
 type ViewMode = "grid" | "list"
 
 const PROJECT_COLORS: { value: string; label: string }[] = [
-    { value: "#dc2626", label: "Red" },
+    { value: "#dd3131", label: "Red" },
     { value: "#ea580c", label: "Orange" },
     { value: "#d97706", label: "Amber" },
     { value: "#16a34a", label: "Green" },
     { value: "#0d9488", label: "Teal" },
-    { value: "#2563eb", label: "Blue" },
-    { value: "#7c3aed", label: "Purple" },
-    { value: "#db2777", label: "Pink" },
+    { value: "#3670ec", label: "Blue" },
+    { value: "#8c52ef", label: "Purple" },
+    { value: "#de3B84", label: "Pink" },
 ]
 
 interface ProjectsPanelProps {
