@@ -1,18 +1,9 @@
 import os
 import logging
 import numpy as np
-import torch
-from kokoro import KPipeline
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("KokoroManager")
-
-# Check CUDA availability
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-logger.info(f"Using device: {DEVICE}")
-if DEVICE == "cuda":
-    logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
 
 # Language code mapping from voice prefix
 LANG_CODE_MAP = {
@@ -54,10 +45,20 @@ VOICES = {
 
 class ModelManager:
     def __init__(self):
-        self.pipelines: dict[str, KPipeline] = {}
+        self.pipelines: dict = {}
         self.voices: list[str] = []
+        self._device = None
         self._load_voices()
         logger.info("ModelManager initialized.")
+
+    def _get_device(self):
+        if self._device is None:
+            import torch
+            self._device = "cuda" if torch.cuda.is_available() else "cpu"
+            logger.info(f"Using device: {self._device}")
+            if self._device == "cuda":
+                logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
+        return self._device
 
     def _load_voices(self):
         """Flatten voice list from all languages."""
@@ -72,9 +73,11 @@ class ModelManager:
         prefix = voice[0]
         return LANG_CODE_MAP.get(prefix, 'a')
 
-    def _get_pipeline(self, lang_code: str) -> KPipeline:
+    def _get_pipeline(self, lang_code: str):
         """Get or create a pipeline for the given language code."""
         if lang_code not in self.pipelines:
+            self._get_device()
+            from kokoro import KPipeline
             logger.info(f"Creating pipeline for lang_code: {lang_code}")
             self.pipelines[lang_code] = KPipeline(lang_code=lang_code)
         return self.pipelines[lang_code]

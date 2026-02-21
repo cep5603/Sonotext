@@ -8,7 +8,6 @@ Supports CustomVoice, VoiceDesign, and Base models.
 import os
 import logging
 import numpy as np
-import torch
 from dataclasses import dataclass
 from typing import Optional
 
@@ -19,9 +18,6 @@ logger = logging.getLogger("Qwen3TTSManager")
 # Suppress repetitive warnings from qwen_tts and transformers libraries
 logging.getLogger("qwen_tts.core.models.configuration_qwen3_tts").setLevel(logging.ERROR)
 logging.getLogger("qwen_tts").setLevel(logging.WARNING)
-# Suppress transformers "Setting pad_token_id to eos_token_id" warning
-import transformers
-transformers.logging.set_verbosity_error()
 
 # Available models by type and size
 QWEN3_MODELS = {
@@ -38,11 +34,18 @@ def get_model_type(model_key: str) -> str:
     """Get model type from model key (e.g., 'custom-1.7B' -> 'custom')."""
     return model_key.split("-")[0]
 
-# Check CUDA availability
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-logger.info(f"Using device: {DEVICE}")
-if DEVICE == "cuda":
-    logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
+_device = None
+
+def get_device() -> str:
+    """Lazy-load torch and check CUDA availability."""
+    global _device
+    if _device is None:
+        import torch
+        _device = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.info(f"Using device: {_device}")
+        if _device == "cuda":
+            logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
+    return _device
 
 
 class Qwen3TTSManager:
@@ -118,15 +121,19 @@ class Qwen3TTSManager:
         logger.info(f"Loading Qwen3-TTS model: {model_id}")
 
         from qwen_tts import Qwen3TTSModel
+        import torch
+        import transformers
+        transformers.logging.set_verbosity_error()
 
         # Determine attention implementation
         use_flash_attn = self._check_flash_attention()
         attn_impl = "flash_attention_2" if use_flash_attn else "sdpa"
 
+        device = get_device()
         self.model = Qwen3TTSModel.from_pretrained(
             model_id,
-            device_map="cuda:0" if DEVICE == "cuda" else "cpu",
-            dtype=torch.bfloat16 if DEVICE == "cuda" else torch.float32,
+            device_map="cuda:0" if device == "cuda" else "cpu",
+            dtype=torch.bfloat16 if device == "cuda" else torch.float32,
             attn_implementation=attn_impl,
         )
         self.model_id = model_id
@@ -153,7 +160,8 @@ class Qwen3TTSManager:
             self.model_key = None
             self.speakers = []
             self.languages = []
-            if DEVICE == "cuda":
+            if get_device() == "cuda":
+                import torch
                 torch.cuda.empty_cache()
             logger.info("Qwen3-TTS model unloaded.")
 
