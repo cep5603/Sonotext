@@ -34,7 +34,8 @@ export function LLMModelSelector() {
             const res = await axios.get("http://localhost:8000/api/llm-models")
             return res.data as LLMModelsResponse
         },
-        refetchInterval: 30000,
+        refetchInterval: false,
+        staleTime: Infinity,
         retry: false,
     })
 

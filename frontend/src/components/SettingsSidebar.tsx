@@ -84,7 +84,8 @@ function Qwen3ModelStatus() {
                 flash_attention: boolean | null
             }
         },
-        refetchInterval: 3000,
+        refetchInterval: false,
+        staleTime: Infinity,
         retry: false,
     })
 
@@ -376,8 +377,8 @@ export function SettingsSidebar({
             const res = await axios.get("http://localhost:8000/api/llm-model-status")
             return res.data as { model: string; status: string }
         },
-        refetchInterval: 5000,
-        staleTime: 0,
+        refetchInterval: false,
+        staleTime: Infinity,
         retry: false,
     })
 

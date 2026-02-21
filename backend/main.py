@@ -486,6 +486,47 @@ def unload_llm_model():
     success = llm_service.unload_model(current_model)
     return {"status": "success" if success else "failed", "model": current_model}
 
+@app.get("/api/status-stream")
+async def get_status_stream():
+    """Stream application status (LLMs, TTS models) via Server-Sent Events."""
+    async def event_generator():
+        while True:
+            try:
+                def _get_status():
+                    # LLM Status
+                    llm_available = llm_service.check_llm_available()
+                    current_llm = llm_service.get_current_model()
+                    llm_status = llm_service.get_model_status(current_llm) if llm_available else "not-loaded"
+                    llm_models = llm_service.get_available_models() if llm_available else []
+
+                    # Qwen3 Status
+                    qwen3_info = qwen3_manager.get_model_info()
+
+                    return {
+                        "llm_available": llm_available,
+                        "current_llm": current_llm,
+                        "llm_status": llm_status,
+                        "llm_models": llm_models,
+                        "qwen3_info": qwen3_info
+                    }
+
+                status_data = await asyncio.to_thread(_get_status)
+
+                yield {
+                    "event": "status",
+                    "data": json.dumps(status_data)
+                }
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logging.error(f"Error in status stream: {e}")
+                # Don't break the stream, just log and loop
+            
+            # Broadcast every 2 seconds
+            await asyncio.sleep(2.0)
+
+    return EventSourceResponse(event_generator())
+
 @app.get("/api/history")
 def get_history():
     return history_manager.get_history()
