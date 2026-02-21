@@ -7,7 +7,7 @@ from typing import Optional
 logger = logging.getLogger("LLMService")
 
 # LM Studio configuration
-LM_STUDIO_URL = "http://localhost:1234"
+LM_STUDIO_URL = "http://127.0.0.1:1234"
 TIMEOUT = 60.0  # seconds
 
 # Current selected model (can be changed via API)
@@ -56,7 +56,7 @@ def check_llm_available() -> bool:
 def get_available_models() -> list[dict]:
     """Get list of available LLMs from LM Studio."""
     try:
-        with httpx.Client(timeout=10.0) as client:
+        with httpx.Client(timeout=3.0) as client:
             response = client.get(f"{LM_STUDIO_URL}/api/v0/models")
             if response.status_code == 200:
                 data = response.json()

@@ -85,6 +85,7 @@ function Qwen3ModelStatus() {
             }
         },
         refetchInterval: 3000,
+        retry: false,
     })
 
     const loadMutation = useMutation({
@@ -377,6 +378,7 @@ export function SettingsSidebar({
         },
         refetchInterval: 5000,
         staleTime: 0,
+        retry: false,
     })
 
     const unloadMutation = useMutation({

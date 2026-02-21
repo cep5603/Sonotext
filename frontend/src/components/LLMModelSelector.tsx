@@ -35,6 +35,7 @@ export function LLMModelSelector() {
             return res.data as LLMModelsResponse
         },
         refetchInterval: 30000,
+        retry: false,
     })
 
     const setModelMutation = useMutation({
