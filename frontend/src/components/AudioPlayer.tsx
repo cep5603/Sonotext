@@ -110,7 +110,7 @@ export function AudioPlayer({
             cursorColor: 'rgb(101, 165, 255)',
             barWidth: 2,
             barGap: 1,
-            height: 80,
+            height: 60,
         })
 
         wavesurferRef.current = ws
@@ -228,7 +228,7 @@ export function AudioPlayer({
     if (!audioUrl) return null
 
     return (
-        <div className="w-full space-y-4 rounded-lg border bg-card p-4 animate-in fade-in zoom-in-95 duration-300">
+        <div className="w-full space-y-2 rounded-lg border bg-card p-4 animate-in fade-in zoom-in-95 duration-300">
             {/* Filename display */}
             {filename && (
                 <div className="text-sm font-medium text-muted-foreground truncate">
@@ -240,7 +240,7 @@ export function AudioPlayer({
             <div ref={containerRef} className="w-full" />
 
             {/* Time display */}
-            <div className="flex justify-between text-xs text-muted-foreground font-mono">
+            <div className="flex justify-between text-xs text-muted-foreground">
                 <span>{formatTime(currentTime)}</span>
                 <span>{formatTime(duration)}</span>
             </div>
