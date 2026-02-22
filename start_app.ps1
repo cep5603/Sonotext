@@ -11,16 +11,40 @@ if (-not (Test-Path "$VenvPath\Scripts\python.exe")) {
 }
 
 # Check if PyTorch with CUDA is installed
-$torchCheck = & "$VenvPath\Scripts\python.exe" -c "import torch; print(torch.cuda.is_available())" 2>$null
-if ($torchCheck -ne "True") {
-    Write-Host "Installing PyTorch with CUDA 12.8..." -ForegroundColor Yellow
-    & "$VenvPath\Scripts\pip.exe" install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+$TorchCheckPath = "$VenvPath\.torch_checked"
+if (-not (Test-Path $TorchCheckPath)) {
+    $torchCheck = & "$VenvPath\Scripts\python.exe" -c "import sys; import torch; sys.exit(0 if torch.cuda.is_available() else 1)" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Installing PyTorch with CUDA 12.8..." -ForegroundColor Yellow
+        & "$VenvPath\Scripts\pip.exe" install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+        if ($LASTEXITCODE -eq 0) { New-Item -Path $TorchCheckPath -ItemType File -Force | Out-Null }
+    } else {
+        New-Item -Path $TorchCheckPath -ItemType File -Force | Out-Null
+    }
 }
 
-# Install other dependencies
-Write-Host "Installing Backend Dependencies..." -ForegroundColor Yellow
-& "$VenvPath\Scripts\pip.exe" install -r "$BackendPath\requirements.txt" --upgrade -q
+# Install other dependencies only if requirements.txt changed
+$ReqPath = "$BackendPath\requirements.txt"
+$HashPath = "$VenvPath\.req_hash"
+$skipInstall = $false
 
+if ((Test-Path $HashPath) -and (Test-Path $ReqPath)) {
+    $currentHash = (Get-FileHash $ReqPath -Algorithm MD5).Hash
+    $savedHash = (Get-Content $HashPath -ErrorAction SilentlyContinue).Trim()
+    if ($currentHash -eq $savedHash) {
+        $skipInstall = $true
+    }
+}
+
+if (-not $skipInstall) {
+    Write-Host "Installing Backend Dependencies..." -ForegroundColor Yellow
+    & "$VenvPath\Scripts\pip.exe" install -r $ReqPath --upgrade -q
+    if ($LASTEXITCODE -eq 0) {
+        (Get-FileHash $ReqPath -Algorithm MD5).Hash | Out-File $HashPath -Encoding UTF8
+    }
+} else {
+    Write-Host "Backend dependencies are up-to-date." -ForegroundColor DarkGray
+}
 Write-Host "Starting Backend Server..." -ForegroundColor Green
 Start-Process -FilePath "$VenvPath\Scripts\python.exe" -ArgumentList "main.py" -WorkingDirectory $BackendPath -NoNewWindow -PassThru
 
