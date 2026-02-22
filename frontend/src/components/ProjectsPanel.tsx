@@ -102,7 +102,7 @@ function ProjectTile({ project, onOpen, onRename, onDelete, onColorChange }: Sor
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                     <button
                         {...attributes} {...listeners}
-                        className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 -ml-1 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity touch-none"
+                        className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 -ml-1 opacity-60 hover:!opacity-100 transition-opacity touch-none"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <DotsSixVerticalIcon size={16} className="text-muted-foreground" />
@@ -195,7 +195,7 @@ function ProjectRow({ project, onOpen, onRename, onDelete, onColorChange }: Sort
         >
             <button
                 {...attributes} {...listeners}
-                className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity touch-none"
+                className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 opacity-60 hover:!opacity-100 transition-opacity touch-none"
                 onClick={(e) => e.stopPropagation()}
             >
                 <DotsSixVerticalIcon size={16} className="text-muted-foreground" />

@@ -11,6 +11,7 @@ interface AudioPlayerProps {
     onTimeUpdate?: (time: number) => void
     onPlayingChange?: (isPlaying: boolean) => void
     seekToTime?: number | null
+    accentColor?: string | null
 }
 
 function formatTime(seconds: number): string {
@@ -21,6 +22,8 @@ function formatTime(seconds: number): string {
 
 const TIME_UPDATE_INTERVAL_MS = 100
 
+const DEFAULT_ACCENT = 'rgb(101, 165, 255)'
+
 export function AudioPlayer({
     audioUrl,
     filename,
@@ -28,7 +31,8 @@ export function AudioPlayer({
     onPlayStarted,
     onTimeUpdate,
     onPlayingChange,
-    seekToTime
+    seekToTime,
+    accentColor
 }: AudioPlayerProps) {
     const containerRef = useRef<HTMLDivElement>(null)
     const wavesurferRef = useRef<WaveSurfer | null>(null)
@@ -106,8 +110,8 @@ export function AudioPlayer({
         const ws = WaveSurfer.create({
             container: containerRef.current,
             waveColor: 'rgb(200, 200, 200)',
-            progressColor: 'rgb(101, 165, 255)',
-            cursorColor: 'rgb(101, 165, 255)',
+            progressColor: accentColor || DEFAULT_ACCENT,
+            cursorColor: accentColor || DEFAULT_ACCENT,
             barWidth: 2,
             barGap: 1,
             height: 60,
@@ -196,6 +200,16 @@ export function AudioPlayer({
         }
     }, [audioUrl])
 
+    // Update wavesurfer colors when accentColor changes
+    useEffect(() => {
+        if (!wavesurferRef.current) return
+        const color = accentColor || DEFAULT_ACCENT
+        wavesurferRef.current.setOptions({
+            progressColor: color,
+            cursorColor: color,
+        })
+    }, [accentColor])
+
     // Handle autoplay prop changes for already-loaded audio
     useEffect(() => {
         if (autoplay && wavesurferRef.current && isReady && !isPlaying) {
@@ -228,7 +242,7 @@ export function AudioPlayer({
     if (!audioUrl) return null
 
     return (
-        <div className="w-full space-y-2 rounded-lg border bg-card p-4 animate-in fade-in zoom-in-95 duration-300">
+        <div className="w-full space-y-2 rounded-lg border bg-card/30 p-4 animate-in fade-in zoom-in-95 duration-300">
             {/* Filename display */}
             {filename && (
                 <div className="text-sm font-medium text-muted-foreground truncate">

@@ -31,6 +31,23 @@ function formatDuration(seconds?: number): string {
     return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
+/** Convert a hex color (#RRGGBB) to the "H S% L%" format used by CSS variables */
+function hexToHsl(hex: string): string {
+    const r = parseInt(hex.slice(1, 3), 16) / 255
+    const g = parseInt(hex.slice(3, 5), 16) / 255
+    const b = parseInt(hex.slice(5, 7), 16) / 255
+    const max = Math.max(r, g, b), min = Math.min(r, g, b)
+    const l = (max + min) / 2
+    if (max === min) return `0 0% ${Math.round(l * 100)}%`
+    const d = max - min
+    const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    let h = 0
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6
+    else if (max === g) h = ((b - r) / d + 2) / 6
+    else h = ((r - g) / d + 4) / 6
+    return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`
+}
+
 
 interface TextToSpeechProps {
     selectedItem: HistoryItem | null
@@ -601,7 +618,14 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
             />
             <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
                 <div className="flex-1 min-w-0 min-h-0 h-full px-8 py-4">
-                    <Card className="border-none shadow-2xl bg-card/80 backdrop-blur-xl h-full flex flex-col max-w-4xl mx-auto">
+                    <Card
+                        className="border shadow-2xl bg-card/80 backdrop-blur-xl h-full flex flex-col max-w-4xl mx-auto transition-colors duration-200"
+                        style={{
+                            borderColor: activeProjectColor ? `${activeProjectColor}33` : undefined,
+                            backgroundColor: activeProjectColor ? `${activeProjectColor}0A` : undefined,
+                            ...(activeProjectColor ? { '--primary': hexToHsl(activeProjectColor) } as React.CSSProperties : {}),
+                        }}
+                    >
                         <CardContent className="p-8 space-y-6 flex-1 flex flex-col overflow-hidden">
 
                             {/* Breadcrumb Navigation */}
@@ -764,6 +788,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                         onTimeUpdate={setAudioCurrentTime}
                                         onPlayingChange={setIsAudioPlaying}
                                         seekToTime={seekToTime}
+                                        accentColor={activeProjectColor}
                                     />
                                 </div>
 
@@ -932,7 +957,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                         </div>
                                     )}
 
-                                    <AudioPlayer audioUrl={audioUrl} filename={audioFilename} />
+                                    <AudioPlayer audioUrl={audioUrl} filename={audioFilename} accentColor={activeProjectColor} />
                                 </>
                             )}
                         </CardContent>

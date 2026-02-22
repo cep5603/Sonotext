@@ -167,7 +167,7 @@ export function SyncedTextView({
         return (
             <div
                 ref={containerRef}
-                className="flex-1 min-h-0 rounded-lg border bg-muted/30 overflow-y-auto p-4"
+                className="flex-1 min-h-0 rounded-lg border bg-card/30 overflow-y-auto p-4"
             >
                 <p className="text-base leading-relaxed whitespace-pre-wrap">
                     {text}
@@ -180,7 +180,7 @@ export function SyncedTextView({
     return (
         <div
             ref={containerRef}
-            className="flex-1 min-h-0 rounded-lg border bg-muted/30 overflow-y-auto p-4"
+            className="flex-1 min-h-0 rounded-lg border bg-card/30 overflow-y-auto p-4"
         >
             <p className="text-base leading-relaxed whitespace-pre-wrap">
                 {alignmentData.map((word, index) => (

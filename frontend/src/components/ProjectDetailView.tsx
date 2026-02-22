@@ -104,31 +104,31 @@ function SortableGenerationCard({ gen, projectId, projectColor, onSelect, onPlay
             }}
             onClick={onSelect}
         >
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
                 <button
                     {...attributes} {...listeners}
-                    className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 mt-0.5 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity touch-none self-start"
+                    className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 opacity-60 hover:!opacity-100 transition-opacity touch-none"
                     onClick={(e) => e.stopPropagation()}
                 >
                     <DotsSixVerticalIcon size={16} className="text-muted-foreground" />
                 </button>
-                <div className="flex-1 min-w-0 space-y-1.5">
-                    <h4 className="text-sm font-medium truncate">{formatFilename(gen.filename)}</h4>
-                    <p className="text-xs text-muted-foreground leading-tight line-clamp-2 break-words">
-                        {gen.text || "No text"}
-                    </p>
-                    <div className="flex items-center text-xs text-muted-foreground gap-1.5 flex-wrap pt-1">
-                        <span>{formatVoiceDisplay(gen.voice, gen.voice_profile_id)}</span>
-                        <span>•</span>
-                        <span>{gen.speed}x</span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                            <ClockIcon size={14} className="shrink-0" />
-                            {formatDuration(gen.duration)}
-                        </span>
-                        <span>•</span>
-                        <span>{new Date(gen.timestamp * 1000).toLocaleDateString()}</span>
-                    </div>
+                <h4 className="text-sm font-medium truncate">{formatFilename(gen.filename)}</h4>
+            </div>
+            <div className="space-y-1.5 mt-1.5">
+                <p className="text-xs text-muted-foreground leading-tight line-clamp-2 break-words">
+                    {gen.text || "No text"}
+                </p>
+                <div className="flex items-center text-xs text-muted-foreground gap-1.5 flex-wrap">
+                    <span>{formatVoiceDisplay(gen.voice, gen.voice_profile_id)}</span>
+                    <span>•</span>
+                    <span>{gen.speed}x</span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                        <ClockIcon size={14} className="shrink-0" />
+                        {formatDuration(gen.duration)}
+                    </span>
+                    <span>•</span>
+                    <span>{new Date(gen.timestamp * 1000).toLocaleDateString()}</span>
                 </div>
             </div>
             <div className="mt-3 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -182,7 +182,7 @@ function SortableGenerationTile({ gen, projectId, projectColor, onSelect, onPlay
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                     <button
                         {...attributes} {...listeners}
-                        className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 -ml-1 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity touch-none"
+                        className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 -ml-1 opacity-60 hover:!opacity-100 transition-opacity touch-none"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <DotsSixVerticalIcon size={16} className="text-muted-foreground" />
