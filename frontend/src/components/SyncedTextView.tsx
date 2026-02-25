@@ -1,11 +1,11 @@
-import { useRef, useEffect, useCallback, useMemo, memo } from "react"
+import { useRef, useEffect, useCallback, useMemo, useState, memo } from "react"
 import type { WordTiming } from "@/types"
 import { cn } from "@/lib/utils"
 
 interface SyncedTextViewProps {
     text: string
     alignmentData: WordTiming[] | null
-    currentTime: number
+    currentTimeRef: React.RefObject<number>
     onSeek: (time: number) => void
     isPlaying: boolean
     autoScroll: boolean
@@ -80,7 +80,7 @@ const WordSpan = memo(function WordSpan({
 export function SyncedTextView({
     text,
     alignmentData,
-    currentTime,
+    currentTimeRef,
     onSeek,
     isPlaying,
     autoScroll
@@ -90,6 +90,11 @@ export function SyncedTextView({
     const lastScrolledIndex = useRef(-1)
     const scrollThrottleRef = useRef(false)
     const scrollThrottleTimeoutRef = useRef<number | null>(null)
+
+    // Word index state — only updated when the active word actually changes
+    const [currentWordIndex, setCurrentWordIndex] = useState(-1)
+    const rafIdRef = useRef<number | null>(null)
+    const lastWordIndexRef = useRef(-1)
 
     // Pre-compute separators once when alignment data or text changes
     const separators = useMemo(() => {
@@ -110,21 +115,46 @@ export function SyncedTextView({
         })
     }, [alignmentData, text])
 
-    // Find the currently active word (only when playing)
-    const currentWordIndex = useMemo(() => {
-        if (!alignmentData || !isPlaying) return -1
-        return findCurrentWordIndex(alignmentData, currentTime)
-    }, [alignmentData, currentTime, isPlaying])
+    // Poll currentTimeRef via rAF and only trigger a state update when word index changes
+    useEffect(() => {
+        if (!isPlaying || !alignmentData || alignmentData.length === 0) {
+            return
+        }
+
+        const words = alignmentData
+        const poll = () => {
+            const time = currentTimeRef.current
+            const idx = findCurrentWordIndex(words, time)
+            if (idx !== lastWordIndexRef.current) {
+                lastWordIndexRef.current = idx
+                setCurrentWordIndex(idx)
+            }
+            rafIdRef.current = requestAnimationFrame(poll)
+        }
+        rafIdRef.current = requestAnimationFrame(poll)
+
+        return () => {
+            if (rafIdRef.current !== null) {
+                cancelAnimationFrame(rafIdRef.current)
+                rafIdRef.current = null
+            }
+            lastWordIndexRef.current = -1
+            setCurrentWordIndex(-1)
+        }
+    }, [isPlaying, alignmentData, currentTimeRef])
+
+    // Effective word index: only highlight while playing
+    const effectiveWordIndex = isPlaying ? currentWordIndex : -1
 
     // Auto-scroll to keep the active word in view (throttled)
     useEffect(() => {
         if (!autoScroll || !isPlaying) return
-        if (currentWordIndex < 0) return
-        if (currentWordIndex === lastScrolledIndex.current) return
+        if (effectiveWordIndex < 0) return
+        if (effectiveWordIndex === lastScrolledIndex.current) return
         if (!activeWordRef.current) return
         if (scrollThrottleRef.current) return
 
-        lastScrolledIndex.current = currentWordIndex
+        lastScrolledIndex.current = effectiveWordIndex
         scrollThrottleRef.current = true
 
         activeWordRef.current.scrollIntoView({
@@ -141,7 +171,7 @@ export function SyncedTextView({
             scrollThrottleRef.current = false
             scrollThrottleTimeoutRef.current = null
         }, 300)
-    }, [currentWordIndex, autoScroll, isPlaying])
+    }, [effectiveWordIndex, autoScroll, isPlaying])
 
     useEffect(() => {
         return () => {
@@ -153,10 +183,10 @@ export function SyncedTextView({
 
     // Reset scroll tracking when audio restarts
     useEffect(() => {
-        if (currentTime < 0.5) {
+        if (effectiveWordIndex <= 0) {
             lastScrolledIndex.current = -1
         }
-    }, [currentTime])
+    }, [effectiveWordIndex])
 
     const handleWordSeek = useCallback((time: number) => {
         onSeek(time)
@@ -189,7 +219,7 @@ export function SyncedTextView({
                         word={word}
                         separator={separators[index]}
                         isLast={index === alignmentData.length - 1}
-                        isActive={index === currentWordIndex}
+                        isActive={index === effectiveWordIndex}
                         activeWordRef={activeWordRef}
                         onSeek={handleWordSeek}
                     />
