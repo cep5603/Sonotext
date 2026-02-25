@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { DotsThreeVerticalIcon, PlayIcon, TrashIcon, DownloadSimpleIcon, ClockIcon, FolderOpenIcon, PencilSimpleIcon, SpinnerGapIcon, CheckIcon, XIcon, MagicWandIcon, WarningIcon, MagnifyingGlassIcon, FunnelIcon } from "@phosphor-icons/react"
+import { DotsThreeVerticalIcon, PlayIcon, PauseIcon, TrashIcon, DownloadSimpleIcon, ClockIcon, FolderOpenIcon, PencilSimpleIcon, SpinnerGapIcon, CheckIcon, XIcon, MagicWandIcon, WarningIcon, MagnifyingGlassIcon, FunnelIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -19,6 +19,8 @@ import type { HistoryItem, VoiceProfile, Project } from "@/types"
 interface HistorySidebarProps {
     onSelectItem: (item: HistoryItem, autoplay?: boolean) => void
     activeDragId?: string | null
+    playingItemId?: string | null
+    onPauseItem?: () => void
 }
 
 function formatDuration(seconds?: number): string {
@@ -251,7 +253,7 @@ function DraggableHistoryCard({ item, isDragging, children, onClick }: {
     )
 }
 
-export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarProps) {
+export function HistorySidebar({ onSelectItem, activeDragId, playingItemId, onPauseItem }: HistorySidebarProps) {
     const queryClient = useQueryClient()
     const [renamingId, setRenamingId] = useState<string | null>(null)
     const [autoRenamingIds, setAutoRenamingIds] = useState<Set<string>>(new Set())
@@ -634,11 +636,18 @@ export function HistorySidebar({ onSelectItem, activeDragId }: HistorySidebarPro
                                     className="h-7 flex-1 text-xs"
                                     onClick={(e) => {
                                         e.stopPropagation()
-                                        onSelectItem(item, true)
+                                        if (playingItemId === item.id) {
+                                            onPauseItem?.()
+                                        } else {
+                                            onSelectItem(item, true)
+                                        }
                                     }}
                                 >
-                                    <PlayIcon size={16} className="mr-2" />
-                                    Play
+                                    {playingItemId === item.id ? (
+                                        <><PauseIcon size={16} className="mr-2" />Pause</>
+                                    ) : (
+                                        <><PlayIcon size={16} className="mr-2" />Play</>
+                                    )}
                                 </Button>
 
                                 <DropdownMenu>

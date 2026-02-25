@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react"
 import WaveSurfer from "wavesurfer.js"
 import { PlayIcon, PauseIcon, DownloadSimpleIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
@@ -24,7 +24,11 @@ const TIME_UPDATE_INTERVAL_MS = 100
 
 const DEFAULT_ACCENT = 'rgb(101, 165, 255)'
 
-export function AudioPlayer({
+export interface AudioPlayerHandle {
+    togglePlay: () => void
+}
+
+export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(function AudioPlayer({
     audioUrl,
     filename,
     autoplay,
@@ -33,13 +37,17 @@ export function AudioPlayer({
     onPlayingChange,
     seekToTime,
     accentColor
-}: AudioPlayerProps) {
+}, ref) {
     const containerRef = useRef<HTMLDivElement>(null)
     const wavesurferRef = useRef<WaveSurfer | null>(null)
     const [isPlaying, setIsPlaying] = useState(false)
     const [currentTime, setCurrentTime] = useState(0)
     const [duration, setDuration] = useState(0)
     const [isReady, setIsReady] = useState(false)
+
+    useImperativeHandle(ref, () => ({
+        togglePlay: () => wavesurferRef.current?.playPause(),
+    }))
 
     // Track autoplay intent - we only autoplay on initial load or when autoplay prop changes to true
     const autoplayRef = useRef(autoplay)
@@ -270,4 +278,4 @@ export function AudioPlayer({
             </div>
         </div>
     )
-}
+})

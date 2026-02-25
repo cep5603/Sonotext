@@ -189,7 +189,7 @@ function SortableGenerationTile({ gen, projectId, projectColor, onSelect, onPlay
                     </button>
                     <h4 className="text-sm font-medium truncate">{formatFilename(gen.filename)}</h4>
                 </div>
-                <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                     <GenerationMenu gen={gen} onRemove={onRemove} onShowInExplorer={onShowInExplorer} />
                 </div>
             </div>

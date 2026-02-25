@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
-import { AudioPlayer } from "./AudioPlayer"
+import { AudioPlayer, type AudioPlayerHandle } from "./AudioPlayer"
 import { SyncedTextView } from "./SyncedTextView"
 import { HistorySidebar } from "./HistorySidebar"
 import { SettingsSidebar } from "./SettingsSidebar"
@@ -86,6 +86,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
     const [isAudioPlaying, setIsAudioPlaying] = useState(false)
     const [seekToTime, setSeekToTime] = useState<number | null>(null)
     const [autoScroll, setAutoScroll] = useState(true)
+    const audioPlayerRef = useRef<AudioPlayerHandle>(null)
     const [copied, setCopied] = useState(false)
     const [cancelConfirmTarget, setCancelConfirmTarget] = useState<"generate" | "clean" | null>(null)
     const cancelConfirmTimeoutRef = useRef<number | null>(null)
@@ -781,6 +782,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                     />
 
                                     <AudioPlayer
+                                        ref={audioPlayerRef}
                                         audioUrl={selectedItem.url.startsWith('http') ? selectedItem.url : `http://localhost:8000${selectedItem.url}`}
                                         filename={selectedItem.filename}
                                         autoplay={shouldAutoplay}
@@ -964,7 +966,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                     </Card>
                 </div>
 
-                <HistorySidebar onSelectItem={handleSelectItem} activeDragId={activeDragId} />
+                <HistorySidebar onSelectItem={handleSelectItem} activeDragId={activeDragId} playingItemId={isAudioPlaying ? selectedItem?.id ?? null : null} onPauseItem={() => audioPlayerRef.current?.togglePlay()} />
                 <DragOverlay>
                     {activeDragId && (
                         <div className="rounded-lg border border-primary bg-card px-3 py-2 shadow-xl text-sm font-medium opacity-90 max-w-[200px] truncate">
