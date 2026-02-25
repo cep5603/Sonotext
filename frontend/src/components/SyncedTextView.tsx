@@ -183,7 +183,7 @@ export function SyncedTextView({
 
     // Reset scroll tracking when audio restarts
     useEffect(() => {
-        if (effectiveWordIndex <= 0) {
+        if (effectiveWordIndex < 0) {
             lastScrolledIndex.current = -1
         }
     }, [effectiveWordIndex])
