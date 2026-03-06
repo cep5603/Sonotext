@@ -11,7 +11,7 @@ LM_STUDIO_URL = "http://127.0.0.1:1234"
 TIMEOUT = 60.0  # seconds
 
 # Current selected model (can be changed via API)
-_current_model: str = "google/gemma-3-4b"
+_current_model: str = "qwen3.5-2b/Qwen3.5-2B-Q8_0"
 
 # Chunking configuration for text cleanup
 CHUNK_SIZE = 12000  # ~4000 tokens (assuming ~3 chars per token)
