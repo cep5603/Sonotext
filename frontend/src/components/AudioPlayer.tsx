@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react"
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react"
 import WaveSurfer from "wavesurfer.js"
 import { PlayIcon, PauseIcon, DownloadSimpleIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
+import { Slider } from "@/components/ui/slider"
+import { Input } from "@/components/ui/input"
 
 interface AudioPlayerProps {
     audioUrl: string | null
@@ -21,6 +23,9 @@ function formatTime(seconds: number): string {
 }
 
 const TIME_UPDATE_INTERVAL_MS = 100
+const SPEED_MIN = 0.5
+const SPEED_MAX = 2.0
+const SPEED_STEP = 0.25
 
 const DEFAULT_ACCENT = 'rgb(101, 165, 255)'
 
@@ -44,6 +49,11 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
     const [currentTime, setCurrentTime] = useState(0)
     const [duration, setDuration] = useState(0)
     const [isReady, setIsReady] = useState(false)
+    const [playbackRate, setPlaybackRate] = useState(1)
+    const [isEditingSpeed, setIsEditingSpeed] = useState(false)
+    const [speedInputValue, setSpeedInputValue] = useState("1")
+    const speedInputRef = useRef<HTMLInputElement>(null)
+    const playbackRateRef = useRef(playbackRate)
 
     useImperativeHandle(ref, () => ({
         togglePlay: () => wavesurferRef.current?.playPause(),
@@ -183,6 +193,9 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
             setDuration(ws.getDuration())
             setIsReady(true)
 
+            // Restore playback rate on new instance
+            ws.setPlaybackRate(playbackRateRef.current)
+
             // Handle autoplay after load
             if (autoplayRef.current) {
                 ws.play()
@@ -235,6 +248,43 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
         }
     }, [seekToTime, duration, isReady])
 
+    // Sync playback rate to WaveSurfer
+    useEffect(() => {
+        playbackRateRef.current = playbackRate
+        if (wavesurferRef.current) {
+            wavesurferRef.current.setPlaybackRate(playbackRate)
+        }
+    }, [playbackRate])
+
+    const applySpeed = useCallback((value: number) => {
+        const clamped = Math.round(Math.max(0.1, Math.min(16, value)) * 100) / 100
+        setPlaybackRate(clamped)
+    }, [])
+
+    const handleSpeedWheel = useCallback((e: React.WheelEvent) => {
+        e.preventDefault()
+        setPlaybackRate(prev => {
+            const direction = e.deltaY < 0 ? 1 : -1
+            const next = Math.round((prev + direction * SPEED_STEP) * 100) / 100
+            return Math.max(SPEED_MIN, Math.min(SPEED_MAX, next))
+        })
+    }, [])
+
+    const commitSpeedInput = useCallback(() => {
+        const parsed = parseFloat(speedInputValue)
+        if (!isNaN(parsed) && parsed > 0) {
+            applySpeed(parsed)
+        }
+        setIsEditingSpeed(false)
+    }, [speedInputValue, applySpeed])
+
+    const startEditingSpeed = useCallback(() => {
+        setSpeedInputValue(String(playbackRate))
+        setIsEditingSpeed(true)
+        // Focus after React commits the Input
+        requestAnimationFrame(() => speedInputRef.current?.select())
+    }, [playbackRate])
+
     const togglePlay = () => {
         wavesurferRef.current?.playPause()
     }
@@ -268,13 +318,62 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
             </div>
 
             {/* Controls */}
-            <div className="flex justify-center gap-4">
-                <Button variant="outline" size="icon" onClick={togglePlay} disabled={!isReady}>
-                    {isPlaying ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
+            <div className="relative flex items-center justify-between">
+                {/* Download (far left) */}
+                <Button variant="outline" size="icon" onClick={handleDownload}
+                    aria-label="Download audio">
+                    <DownloadSimpleIcon size={20} />
                 </Button>
-                <Button variant="outline" size="icon" onClick={handleDownload}>
-                    <DownloadSimpleIcon size={16} />
+
+                {/* Play (center of parent) */}
+                <Button variant="outline" className="absolute left-1/2 -translate-x-1/2 h-9 w-[4.5rem]"
+                    onClick={togglePlay} disabled={!isReady}
+                    aria-label={isPlaying ? 'Pause' : 'Play'}>
+                    {isPlaying ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
                 </Button>
+
+                {/* Speed control (far right) */}
+                <div
+                    className="flex items-center gap-2"
+                    role="group"
+                    aria-label="Playback speed"
+                    onWheel={handleSpeedWheel}
+                >
+                    <Slider
+                        value={[Math.max(SPEED_MIN, Math.min(SPEED_MAX, playbackRate))]}
+                        onValueChange={([v]) => setPlaybackRate(v)}
+                        min={SPEED_MIN}
+                        max={SPEED_MAX}
+                        step={SPEED_STEP}
+                        className="w-24"
+                        aria-label="Playback speed slider"
+                    />
+                    {isEditingSpeed ? (
+                        <Input
+                            ref={speedInputRef}
+                            type="text"
+                            inputMode="decimal"
+                            value={speedInputValue}
+                            onChange={e => setSpeedInputValue(e.target.value)}
+                            onBlur={commitSpeedInput}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') commitSpeedInput()
+                                if (e.key === 'Escape') setIsEditingSpeed(false)
+                            }}
+                            className="h-7 w-16 px-1.5 text-center text-xs tabular-nums"
+                            aria-label="Custom playback speed"
+                        />
+                    ) : (
+                        <button
+                            type="button"
+                            onDoubleClick={startEditingSpeed}
+                            className="h-7 w-16 rounded-md border bg-background px-1.5 text-center text-xs tabular-nums text-muted-foreground transition-colors hover:text-foreground"
+                            aria-label={`Playback speed: ${playbackRate}×. Double-click to edit.`}
+                        >
+                            {playbackRate}×
+                        </button>
+                    )}
+                </div>
             </div>
         </div>
     )
