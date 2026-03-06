@@ -227,10 +227,23 @@ function Qwen3VoiceSelector({
         if (voiceProfileId) {
             const profile = profiles?.find((p) => p.id === voiceProfileId)
             if (profile) {
-                const icon = profile.source === "designed" ? "🎨" : "🎤"
-                return `${icon} ${profile.name}`
+                return (
+                    <span className="flex items-center gap-1.5">
+                        {profile.source === "designed" ? (
+                            <PaletteIcon size={14} className="shrink-0 text-purple-500" />
+                        ) : (
+                            <MicrophoneIcon size={14} className="shrink-0 text-blue-500" />
+                        )}
+                        {profile.name}
+                    </span>
+                )
             }
-            return "🎤 Custom Voice"
+            return (
+                <span className="flex items-center gap-1.5">
+                    <MicrophoneIcon size={14} className="shrink-0 text-blue-500" />
+                    Custom Voice
+                </span>
+            )
         }
         const speaker = QWEN3_SPEAKERS.find((s) => s.id === voice)
         return speaker ? `${speaker.flag} ${speaker.name}` : voice

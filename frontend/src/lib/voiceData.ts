@@ -219,10 +219,10 @@ export function getVoiceInfo(voiceId: string): Voice | undefined {
 }
 
 // Format voice display string for a history item
-// Handles built-in voices (flag + name) and custom profiles (🎤 prefix)
+// Handles built-in voices (flag + name) and custom profiles (name only, icon rendered via JSX)
 export function formatVoiceDisplay(voiceId: string, voiceProfileId?: string | null): string {
     if (voiceProfileId) {
-        return `🎤 ${voiceId}`
+        return voiceId
     }
     const voice = getVoiceInfo(voiceId)
     const lang = getVoiceLanguage(voiceId)

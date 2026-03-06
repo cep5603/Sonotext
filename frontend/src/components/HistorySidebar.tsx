@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { DotsThreeVerticalIcon, PlayIcon, PauseIcon, TrashIcon, DownloadSimpleIcon, ClockIcon, FolderOpenIcon, PencilSimpleIcon, SpinnerGapIcon, CheckIcon, XIcon, MagicWandIcon, WarningIcon, MagnifyingGlassIcon, FunnelIcon } from "@phosphor-icons/react"
+import { DotsThreeVerticalIcon, PlayIcon, PauseIcon, TrashIcon, DownloadSimpleIcon, ClockIcon, FolderOpenIcon, PencilSimpleIcon, SpinnerGapIcon, CheckIcon, XIcon, MagicWandIcon, WarningIcon, MagnifyingGlassIcon, FunnelIcon, MicrophoneIcon, PaletteIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -352,7 +352,7 @@ export function HistorySidebar({ onSelectItem, activeDragId, playingItemId, onPa
     const getVoiceDisplayName = useCallback((item: HistoryItem) => {
         if (item.voice_profile_id) {
             const currentName = profileNameMap.get(item.voice_profile_id)
-            if (currentName) return `🎤 ${currentName}`
+            if (currentName) return currentName
         }
         return formatVoiceDisplay(item.voice, item.voice_profile_id)
     }, [profileNameMap])
@@ -672,7 +672,14 @@ export function HistorySidebar({ onSelectItem, activeDragId, playingItemId, onPa
                                     {item.text || "No text"}
                                 </p>
                                 <div className="flex items-center text-xs text-muted-foreground gap-1.5 flex-wrap pt-1">
-                                    <span>{getVoiceDisplayName(item)}</span>
+                                    <span className="flex items-center gap-1">
+                                        {item.voice_profile_id && (
+                                            voiceProfiles?.find((p) => p.id === item.voice_profile_id)?.source === "designed"
+                                                ? <PaletteIcon size={14} className="shrink-0 text-purple-500" />
+                                                : <MicrophoneIcon size={14} className="shrink-0 text-blue-500" />
+                                        )}
+                                        {getVoiceDisplayName(item)}
+                                    </span>
                                     <span>•</span>
                                     <span>{item.speed}x</span>
                                     <span>•</span>

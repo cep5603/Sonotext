@@ -21,6 +21,7 @@ import { SettingsSidebar } from "./SettingsSidebar"
 import { AnimatedLogo } from "./AnimatedLogo"
 import { ProjectsPanel } from "./ProjectsPanel"
 import { ProjectDetailView } from "./ProjectDetailView"
+import { VoiceSourceIcon } from "./VoiceSourceIcon"
 import type { HistoryItem, WordTiming, Project, WaveformData } from "@/types"
 import { cn } from "@/lib/utils"
 import { formatVoiceDisplay } from "@/lib/voiceData"
@@ -791,7 +792,10 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
 
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                                <span className="font-medium text-foreground">{formatVoiceDisplay(selectedItem.voice, selectedItem.voice_profile_id)}</span>
+                                                <span className="font-medium text-foreground flex items-center gap-1">
+                                                    <VoiceSourceIcon voiceProfileId={selectedItem.voice_profile_id} size={14} />
+                                                    {formatVoiceDisplay(selectedItem.voice, selectedItem.voice_profile_id)}
+                                                </span>
                                                 {selectedItem.model && (
                                                     <>
                                                         <span>•</span>
@@ -884,7 +888,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                         >
                                             <Textarea
                                                 placeholder="Paste text here or drag & drop a PDF..."
-                                                className="flex-1 min-h-0 resize-none text-lg p-6 bg-transparent border-none focus-visible:ring-0"
+                                                className="flex-1 min-h-0 resize-none text-lg p-6 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0"
                                                 value={text}
                                                 onChange={(e) => setText(e.target.value)}
                                             />

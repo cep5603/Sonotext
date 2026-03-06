@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { PlayIcon, DownloadSimpleIcon, FolderOpenIcon, TrashIcon, ClockIcon, DotsThreeVerticalIcon, SpinnerGapIcon, DotsSixVerticalIcon, SquaresFourIcon, ListIcon } from "@phosphor-icons/react"
+import { PlayIcon, DownloadSimpleIcon, FolderOpenIcon, LinkBreakIcon, ClockIcon, DotsThreeVerticalIcon, SpinnerGapIcon, DotsSixVerticalIcon, SquaresFourIcon, ListIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
     DropdownMenu,
@@ -14,6 +14,7 @@ import { useSortable, SortableContext, verticalListSortingStrategy, rectSortingS
 import { CSS } from "@dnd-kit/utilities"
 import { cn } from "@/lib/utils"
 import { formatVoiceDisplay } from "@/lib/voiceData"
+import { VoiceSourceIcon } from "./VoiceSourceIcon"
 import type { HistoryItem, Project } from "@/types"
 
 type ViewMode = "grid" | "list"
@@ -63,7 +64,7 @@ function GenerationMenu({ gen, onRemove, onShowInExplorer }: {
                     <DownloadSimpleIcon size={16} className="mr-2" /> Download
                 </DropdownMenuItem>
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onRemove}>
-                    <TrashIcon size={16} className="mr-2" /> Remove from Project
+                    <LinkBreakIcon size={16} className="mr-2" /> Unlink from Project
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
@@ -119,7 +120,10 @@ function SortableGenerationCard({ gen, projectId, projectColor, onSelect, onPlay
                     {gen.text || "No text"}
                 </p>
                 <div className="flex items-center text-xs text-muted-foreground gap-1.5 flex-wrap">
-                    <span>{formatVoiceDisplay(gen.voice, gen.voice_profile_id)}</span>
+                    <span className="flex items-center gap-1">
+                        <VoiceSourceIcon voiceProfileId={gen.voice_profile_id} size={12} />
+                        {formatVoiceDisplay(gen.voice, gen.voice_profile_id)}
+                    </span>
                     <span>•</span>
                     <span>{gen.speed}x</span>
                     <span>•</span>
@@ -199,7 +203,10 @@ function SortableGenerationTile({ gen, projectId, projectColor, onSelect, onPlay
             </p>
 
             <div className="flex items-center text-xs text-muted-foreground gap-1.5 flex-wrap">
-                <span>{formatVoiceDisplay(gen.voice, gen.voice_profile_id)}</span>
+                <span className="flex items-center gap-1">
+                    <VoiceSourceIcon voiceProfileId={gen.voice_profile_id} size={12} />
+                    {formatVoiceDisplay(gen.voice, gen.voice_profile_id)}
+                </span>
                 <span>•</span>
                 <span className="flex items-center gap-1">
                     <ClockIcon size={14} className="shrink-0" />
