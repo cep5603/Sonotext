@@ -82,7 +82,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
     const [cleanupStats, setCleanupStats] = useState<{ totalSeconds: number; avgPerChunk: number } | null>(null)
     // Audio-text sync state
     const [alignmentData, setAlignmentData] = useState<WordTiming[] | null>(null)
-    const [audioCurrentTime, setAudioCurrentTime] = useState(0)
+    const audioCurrentTimeRef = useRef(0)
     const [isAudioPlaying, setIsAudioPlaying] = useState(false)
     const [seekToTime, setSeekToTime] = useState<number | null>(null)
     const [autoScroll, setAutoScroll] = useState(true)
@@ -775,7 +775,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                     <SyncedTextView
                                         text={selectedItem.text}
                                         alignmentData={alignmentData}
-                                        currentTime={audioCurrentTime}
+                                        currentTimeRef={audioCurrentTimeRef}
                                         onSeek={handleSeek}
                                         isPlaying={isAudioPlaying}
                                         autoScroll={autoScroll}
@@ -787,7 +787,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                         filename={selectedItem.filename}
                                         autoplay={shouldAutoplay}
                                         onPlayStarted={() => setShouldAutoplay(false)}
-                                        onTimeUpdate={setAudioCurrentTime}
+                                        onTimeUpdate={(t) => { audioCurrentTimeRef.current = t }}
                                         onPlayingChange={setIsAudioPlaying}
                                         seekToTime={seekToTime}
                                         accentColor={activeProjectColor}
