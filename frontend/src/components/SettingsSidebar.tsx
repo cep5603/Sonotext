@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
 import { SpinnerGapIcon, PowerIcon, CircleIcon, ArrowsClockwiseIcon, LightningIcon, SparkleIcon, MicrophoneIcon, PaletteIcon, CaretDownIcon, CheckIcon } from "@phosphor-icons/react"
@@ -370,6 +370,20 @@ export function SettingsSidebar({
     const [voiceManagerOpen, setVoiceManagerOpen] = useState(false)
     const [createVoiceOpen, setCreateVoiceOpen] = useState(false)
 
+    const handleSpeedWheel = useCallback((e: React.WheelEvent) => {
+        e.preventDefault()
+        const direction = e.deltaY < 0 ? 1 : -1
+        const next = Math.round((speed[0] + direction * 0.1) * 10) / 10
+        onSpeedChange([Math.max(0.5, Math.min(2.0, next))])
+    }, [speed, onSpeedChange])
+
+    const handleChunkSizeWheel = useCallback((e: React.WheelEvent) => {
+        e.preventDefault()
+        const direction = e.deltaY < 0 ? 1 : -1
+        const next = chunkSize[0] + direction * 50
+        onChunkSizeChange([Math.max(100, Math.min(2000, next))])
+    }, [chunkSize, onChunkSizeChange])
+
     // LLM status
     const { data: modelStatus } = useQuery({
         queryKey: ["llm-model-status"],
@@ -516,13 +530,15 @@ export function SettingsSidebar({
                                 <Label>Speed</Label>
                                 <span className="text-sm text-muted-foreground">{speed[0]}x</span>
                             </div>
-                            <Slider
-                                value={speed}
-                                onValueChange={onSpeedChange}
-                                min={0.5}
-                                max={2.0}
-                                step={0.1}
-                            />
+                            <div onWheel={handleSpeedWheel}>
+                                <Slider
+                                    value={speed}
+                                    onValueChange={onSpeedChange}
+                                    min={0.5}
+                                    max={2.0}
+                                    step={0.1}
+                                />
+                            </div>
                         </div>
                     )}
 
@@ -531,13 +547,15 @@ export function SettingsSidebar({
                             <Label>Chunk Size</Label>
                             <span className="text-sm text-muted-foreground">{chunkSize[0]} chars</span>
                         </div>
-                        <Slider
-                            value={chunkSize}
-                            onValueChange={onChunkSizeChange}
-                            min={100}
-                            max={2000}
-                            step={50}
-                        />
+                        <div onWheel={handleChunkSizeWheel}>
+                            <Slider
+                                value={chunkSize}
+                                onValueChange={onChunkSizeChange}
+                                min={100}
+                                max={2000}
+                                step={50}
+                            />
+                        </div>
                     </div>
                 </div>
 
