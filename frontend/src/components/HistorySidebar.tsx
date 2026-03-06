@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
 import { DotsThreeVerticalIcon, PlayIcon, PauseIcon, TrashIcon, DownloadSimpleIcon, ClockIcon, FolderOpenIcon, PencilSimpleIcon, SpinnerGapIcon, CheckIcon, XIcon, MagicWandIcon, WarningIcon, MagnifyingGlassIcon, FunnelIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import {
     DropdownMenu,
@@ -41,8 +42,6 @@ function formatFilenameEdit(filename: string): string {
     const basename = filename.split('/').pop() || filename
     return basename.replace(/\.wav$/, '').replace(/-[a-f0-9]{8}$/, '')
 }
-
-
 
 // Normalize string for search: lowercase, strip punctuation/symbols, collapse whitespace
 function normalizeForSearch(str: string): string {
@@ -300,6 +299,21 @@ export function HistorySidebar({ onSelectItem, activeDragId, playingItemId, onPa
         }
         return ids
     }, [selectedProjectIds, projects])
+
+    const projectsByGenerationId = useMemo(() => {
+        const map = new Map<string, Project[]>()
+        for (const project of projects) {
+            for (const generationId of project.generation_ids) {
+                const existing = map.get(generationId)
+                if (existing) {
+                    existing.push(project)
+                } else {
+                    map.set(generationId, [project])
+                }
+            }
+        }
+        return map
+    }, [projects])
 
     // Fetch voice profiles for name resolution
     const { data: voiceProfiles } = useQuery({
@@ -598,6 +612,7 @@ export function HistorySidebar({ onSelectItem, activeDragId, playingItemId, onPa
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {filteredHistory.map((item) => {
+                    const itemProjects = projectsByGenerationId.get(item.id) || []
                     return (
                         <DraggableHistoryCard key={item.id} item={item} isDragging={activeDragId === item.id} onClick={() => onSelectItem(item)}>
                             <div className="space-y-1.5">
@@ -611,6 +626,25 @@ export function HistorySidebar({ onSelectItem, activeDragId, playingItemId, onPa
                                     hasAutoRenameError={autoRenameErrors.has(item.id)}
                                     llmAvailable={llmAvailable}
                                 />
+                                {itemProjects.length > 0 && (
+                                    <div className="flex flex-wrap gap-1">
+                                        {itemProjects.map((project) => (
+                                            <Badge
+                                                key={project.id}
+                                                variant="outline"
+                                                className="max-w-full px-1.5 py-0 text-[10px] font-medium leading-4"
+                                                style={{
+                                                    borderColor: project.color || undefined,
+                                                    backgroundColor: project.color ? `${project.color}14` : undefined,
+                                                    color: project.color || undefined,
+                                                }}
+                                                title={project.name}
+                                            >
+                                                <span className="truncate">{project.name}</span>
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                )}
                                 {/* Text preview in gray */}
                                 <p className="text-xs text-muted-foreground leading-tight line-clamp-2 break-words" title={item.text}>
                                     {item.text || "No text"}

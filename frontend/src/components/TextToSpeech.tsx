@@ -103,16 +103,18 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
     const [sourceProjectId, setSourceProjectId] = useState<string | null>(null) // which project the detail view came from
     const [activeDragId, setActiveDragId] = useState<string | null>(null)
 
+    const setActiveProjectState = (project: Project | null) => {
+        setActiveProjectId(project?.id ?? null)
+        setActiveProjectName(project?.name ?? null)
+        setActiveProjectColor(project?.color || null)
+    }
+
     // Sync viewMode when selectedItem changes externally (e.g. from sidebar click)
     useEffect(() => {
         if (selectedItem && viewMode !== "detail") {
             setViewMode("detail")
-            // If clicking from sidebar (not from a project), clear source project
-            if (viewMode !== "projectDetail") {
-                setSourceProjectId(null)
-            }
         }
-    }, [selectedItem])
+    }, [selectedItem, viewMode])
 
     // DnD sensors
     const sensors = useSensors(
@@ -204,27 +206,21 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
     // Navigation helpers
     const goToProjects = () => {
         onSelectedItemChange(null)
-        setActiveProjectId(null)
-        setActiveProjectName(null)
-        setActiveProjectColor(null)
+        setActiveProjectState(null)
         setSourceProjectId(null)
         setViewMode("projects")
     }
 
     const goToProjectDetail = (project: Project) => {
         onSelectedItemChange(null)
-        setActiveProjectId(project.id)
-        setActiveProjectName(project.name)
-        setActiveProjectColor(project.color || null)
+        setActiveProjectState(project)
         setSourceProjectId(null)
         setViewMode("projectDetail")
     }
 
     const goToGenerator = () => {
         onSelectedItemChange(null)
-        setActiveProjectId(null)
-        setActiveProjectName(null)
-        setActiveProjectColor(null)
+        setActiveProjectState(null)
         setSourceProjectId(null)
         setViewMode("generator")
         setAlignmentData(null)
@@ -532,21 +528,33 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
         return projectList.find((project) => project.id === projectId)
     }
 
+    const findProjectForGeneration = (item: HistoryItem, preferredProjectId?: string | null) => {
+        const preferredProject = preferredProjectId ? getProjectFromCache(preferredProjectId) : null
+        if (preferredProject?.generations?.some((generation) => generation.id === item.id)) {
+            return preferredProject
+        }
+
+        const projectList = queryClient.getQueryData<Project[]>(["projects"]) || []
+        for (const projectSummary of projectList) {
+            const project = getProjectFromCache(projectSummary.id) || projectSummary
+            if (project.generations?.some((generation) => generation.id === item.id)) {
+                return project
+            }
+        }
+
+        return null
+    }
+
     const updateProjectBreadcrumbForSelection = (item: HistoryItem) => {
-        const currentProjectId = sourceProjectId ?? activeProjectId
-        if (!currentProjectId) {
+        const project = findProjectForGeneration(item, sourceProjectId ?? activeProjectId)
+        if (!project) {
+            setActiveProjectState(null)
             setSourceProjectId(null)
             return
         }
 
-        const project = getProjectFromCache(currentProjectId)
-        const isInProject = project?.generations?.some((generation) => generation.id === item.id)
-
-        if (isInProject) {
-            setSourceProjectId(currentProjectId)
-        } else {
-            setSourceProjectId(null)
-        }
+        setActiveProjectState(project)
+        setSourceProjectId(project.id)
     }
 
     const handleSelectItem = (item: HistoryItem, autoplay: boolean = false) => {
@@ -565,10 +573,8 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
         setSeekToTime(null)
     }
 
-
     // Handle selecting a generation from project detail view
     const handleSelectFromProject = (item: HistoryItem, autoplay: boolean = false) => {
-        setSourceProjectId(activeProjectId)
         handleSelectItem(item, autoplay)
     }
 
