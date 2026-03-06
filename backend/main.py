@@ -26,6 +26,8 @@ import alignment_service
 
 app = FastAPI(title="Sonotext Local API")
 
+WAVEFORM_PEAK_COUNT = 1200
+
 # CORS Setup
 app.add_middleware(
     CORSMiddleware,
@@ -124,6 +126,66 @@ def crossfade_chunks(chunks: list[np.ndarray], sample_rate: int, crossfade_ms: i
             ])
     
     return result
+
+def build_waveform_payload(samples: np.ndarray, sample_rate: int, duration: float | None = None) -> dict:
+    audio = np.asarray(samples, dtype=np.float32)
+    if audio.ndim == 2:
+        if audio.shape[1] == 1:
+            audio = audio[:, 0]
+        else:
+            audio = audio.mean(axis=1)
+    elif audio.ndim > 2:
+        audio = audio.reshape(audio.shape[0], -1).mean(axis=1)
+
+    audio = np.nan_to_num(audio, nan=0.0, posinf=0.0, neginf=0.0)
+    if audio.size == 0:
+        return {
+            "peaks": [0.0],
+            "duration": float(duration or 0.0),
+        }
+
+    bucket_count = max(1, min(WAVEFORM_PEAK_COUNT, int(audio.shape[0])))
+    bucket_size = max(1, int(np.ceil(audio.shape[0] / bucket_count)))
+    peaks = [
+        float(np.max(np.abs(audio[start:start + bucket_size])))
+        for start in range(0, audio.shape[0], bucket_size)
+    ]
+    peak_max = max(peaks, default=0.0)
+    if peak_max > 0:
+        peaks = [round(peak / peak_max, 6) for peak in peaks]
+
+    return {
+        "peaks": peaks,
+        "duration": float(duration if duration is not None else audio.shape[0] / sample_rate),
+    }
+
+def load_waveform_payload(waveform_path: str) -> dict | None:
+    try:
+        with open(waveform_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        peaks = data.get("peaks")
+        duration = data.get("duration")
+        if not isinstance(peaks, list) or duration is None:
+            return None
+        return {
+            "peaks": [float(peak) for peak in peaks],
+            "duration": float(duration),
+        }
+    except Exception:
+        return None
+
+def save_waveform_payload(waveform_path: str, payload: dict):
+    with open(waveform_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f)
+
+def generate_waveform_payload(audio_path: str) -> dict:
+    samples, sample_rate = sf.read(audio_path, dtype="float32")
+    return build_waveform_payload(samples, sample_rate)
+
+def sonotext_loop_factory():
+    if os.name == "nt":
+        return asyncio.SelectorEventLoop()
+    return asyncio.new_event_loop()
 
 @app.get("/api/voices")
 def get_voices(engine: str = "kokoro"):
@@ -648,6 +710,38 @@ async def get_alignment(entry_id: str):
         logging.error(f"Alignment failed for {entry_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Alignment failed: {str(e)}")
 
+@app.get("/api/waveform/{entry_id}")
+async def get_waveform(entry_id: str):
+    history = history_manager.get_history()
+    entry = next((e for e in history if e["id"] == entry_id), None)
+
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found")
+
+    audio_path = history_manager.get_output_path(entry["filename"])
+    waveform_path = history_manager.get_waveform_path(audio_path)
+
+    cached_waveform = await asyncio.to_thread(load_waveform_payload, waveform_path)
+    if cached_waveform:
+        return {
+            **cached_waveform,
+            "cached": True,
+        }
+
+    if not os.path.exists(audio_path):
+        raise HTTPException(status_code=404, detail="Audio file not found")
+
+    try:
+        waveform_payload = await asyncio.to_thread(generate_waveform_payload, audio_path)
+        await asyncio.to_thread(save_waveform_payload, waveform_path, waveform_payload)
+        return {
+            **waveform_payload,
+            "cached": False,
+        }
+    except Exception as e:
+        logging.error(f"Waveform generation failed for {entry_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Waveform generation failed: {str(e)}")
+
 @app.post("/api/generate")
 async def generate_audio(req: GenerateRequest):
     """Generate audio with progress streaming via SSE."""
@@ -750,6 +844,11 @@ async def generate_audio(req: GenerateRequest):
             
             filepath = history_manager.get_output_path_for_new_file(filename)
             sf.write(filepath, final_samples, sample_rate, format='WAV')
+            try:
+                waveform_payload = build_waveform_payload(final_samples, sample_rate, duration)
+                save_waveform_payload(history_manager.get_waveform_path(filepath), waveform_payload)
+            except Exception as e:
+                logging.warning(f"Failed to cache waveform for {filepath}: {e}")
             
             # Build model identifier for history
             if req.engine == "qwen3":
@@ -972,10 +1071,13 @@ async def show_in_explorer(req: ShowInExplorerRequest):
         return {"status": "success"}
     except Exception as e:
         logging.error(f"Failed to open explorer: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        subprocess.run(["explorer", "/select,", abs_path])
+    return {"status": "success"}
 
 if __name__ == "__main__":
     import uvicorn
+    if os.name == "nt" and hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     # Note: reload=False to prevent restarts during Qwen3-TTS model loading
     # Restart manually after code changes
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False, loop="main:sonotext_loop_factory")

@@ -24,6 +24,12 @@ export interface AlignmentData {
     cached: boolean
 }
 
+export interface WaveformData {
+    peaks: number[]
+    duration: number
+    cached: boolean
+}
+
 export interface VoiceProfile {
     id: string
     name: string

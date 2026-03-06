@@ -53,6 +53,12 @@ class HistoryManager:
         """Get absolute path from a relative path (date_folder/filename or just filename for legacy)."""
         return os.path.join(OUTPUTS_DIR, relative_path)
 
+    def get_alignment_path(self, audio_path: str) -> str:
+        return os.path.splitext(audio_path)[0] + ".alignment.json"
+
+    def get_waveform_path(self, audio_path: str) -> str:
+        return os.path.splitext(audio_path)[0] + ".waveform.json"
+
     def add_entry(self, text: str, voice: str, speed: float, filename: str, duration: float, model: str = "kokoro", voice_profile_id: str | None = None) -> Dict:
         with self._lock:  # Serialize modifications
             history = self._load_history()
@@ -91,13 +97,20 @@ class HistoryManager:
                         except Exception as e:
                             logging.error(f"Failed to delete file {filepath}: {e}")
                     # Also delete alignment cache file if it exists
-                    alignment_path = os.path.splitext(filepath)[0] + ".alignment.json"
+                    alignment_path = self.get_alignment_path(filepath)
                     if os.path.exists(alignment_path):
                         try:
                             os.remove(alignment_path)
                             logging.info(f"Deleted alignment: {alignment_path}")
                         except Exception as e:
                             logging.error(f"Failed to delete alignment {alignment_path}: {e}")
+                    waveform_path = self.get_waveform_path(filepath)
+                    if os.path.exists(waveform_path):
+                        try:
+                            os.remove(waveform_path)
+                            logging.info(f"Deleted waveform: {waveform_path}")
+                        except Exception as e:
+                            logging.error(f"Failed to delete waveform {waveform_path}: {e}")
                     break
             history = [h for h in history if h["id"] != entry_id]
             self._save_history(history)
@@ -154,14 +167,22 @@ class HistoryManager:
                         return None
                     
                     # Also rename alignment cache file if it exists
-                    old_alignment = os.path.splitext(old_path)[0] + ".alignment.json"
-                    new_alignment = os.path.splitext(new_path)[0] + ".alignment.json"
+                    old_alignment = self.get_alignment_path(old_path)
+                    new_alignment = self.get_alignment_path(new_path)
                     if os.path.exists(old_alignment):
                         try:
                             os.rename(old_alignment, new_alignment)
                             logging.info(f"Renamed alignment: {old_alignment} -> {new_alignment}")
                         except Exception as e:
                             logging.error(f"Failed to rename alignment: {e}")
+                    old_waveform = self.get_waveform_path(old_path)
+                    new_waveform = self.get_waveform_path(new_path)
+                    if os.path.exists(old_waveform):
+                        try:
+                            os.rename(old_waveform, new_waveform)
+                            logging.info(f"Renamed waveform: {old_waveform} -> {new_waveform}")
+                        except Exception as e:
+                            logging.error(f"Failed to rename waveform: {e}")
                     
                     # Update entry
                     entry["filename"] = new_relative_path

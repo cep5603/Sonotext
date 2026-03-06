@@ -20,7 +20,7 @@ import { HistorySidebar } from "./HistorySidebar"
 import { SettingsSidebar } from "./SettingsSidebar"
 import { ProjectsPanel } from "./ProjectsPanel"
 import { ProjectDetailView } from "./ProjectDetailView"
-import type { HistoryItem, WordTiming, Project } from "@/types"
+import type { HistoryItem, WordTiming, Project, WaveformData } from "@/types"
 import { cn } from "@/lib/utils"
 import { formatVoiceDisplay } from "@/lib/voiceData"
 
@@ -82,6 +82,8 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
     const [cleanupStats, setCleanupStats] = useState<{ totalSeconds: number; avgPerChunk: number } | null>(null)
     // Audio-text sync state
     const [alignmentData, setAlignmentData] = useState<WordTiming[] | null>(null)
+    const [waveformData, setWaveformData] = useState<WaveformData | null>(null)
+    const [isWaveformDataResolved, setIsWaveformDataResolved] = useState(true)
     const audioCurrentTimeRef = useRef(0)
     const [isAudioPlaying, setIsAudioPlaying] = useState(false)
     const [seekToTime, setSeekToTime] = useState<number | null>(null)
@@ -224,6 +226,8 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
         setSourceProjectId(null)
         setViewMode("generator")
         setAlignmentData(null)
+        setWaveformData(null)
+        setIsWaveformDataResolved(true)
         setSeekToTime(null)
     }
 
@@ -563,13 +567,20 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
             setShouldAutoplay(true)
             return
         }
+        if (selectedItem?.id === item.id) {
+            return
+        }
         updateProjectBreadcrumbForSelection(item)
+        setIsAudioPlaying(false)
+        audioCurrentTimeRef.current = 0
         onSelectedItemChange(item)
         setAudioUrl(`http://localhost:8000${item.url}`)
         setAudioFilename(item.filename)
         setShouldAutoplay(autoplay)
         // Reset alignment state for new item
         setAlignmentData(null)
+        setWaveformData(null)
+        setIsWaveformDataResolved(false)
         setSeekToTime(null)
     }
 
@@ -596,6 +607,45 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
         }
 
         fetchAlignment()
+    }, [selectedItem?.id])
+
+    useEffect(() => {
+        if (!selectedItem) {
+            setWaveformData(null)
+            setIsWaveformDataResolved(true)
+            return
+        }
+
+        const abortController = new AbortController()
+        setWaveformData(null)
+        setIsWaveformDataResolved(false)
+
+        const fetchWaveform = async () => {
+            try {
+                const response = await fetch(`http://localhost:8000/api/waveform/${selectedItem.id}`, {
+                    signal: abortController.signal,
+                })
+                if (response.ok) {
+                    const data = await response.json()
+                    setWaveformData(data)
+                }
+            } catch (error) {
+                if (abortController.signal.aborted) {
+                    return
+                }
+                console.error("Failed to fetch waveform:", error)
+            } finally {
+                if (!abortController.signal.aborted) {
+                    setIsWaveformDataResolved(true)
+                }
+            }
+        }
+
+        fetchWaveform()
+
+        return () => {
+            abortController.abort()
+        }
     }, [selectedItem?.id])
 
     // Handle seek requests from SyncedTextView
@@ -791,6 +841,8 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                         ref={audioPlayerRef}
                                         audioUrl={selectedItem.url.startsWith('http') ? selectedItem.url : `http://localhost:8000${selectedItem.url}`}
                                         filename={selectedItem.filename}
+                                        waveformData={waveformData}
+                                        deferLoadUntilWaveformReady={!isWaveformDataResolved}
                                         autoplay={shouldAutoplay}
                                         onPlayStarted={() => setShouldAutoplay(false)}
                                         onTimeUpdate={(t) => { audioCurrentTimeRef.current = t }}

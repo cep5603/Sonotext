@@ -4,10 +4,13 @@ import { PlayIcon, PauseIcon, DownloadSimpleIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
+import type { WaveformData } from "@/types"
 
 interface AudioPlayerProps {
     audioUrl: string | null
     filename?: string
+    waveformData?: WaveformData | null
+    deferLoadUntilWaveformReady?: boolean
     autoplay?: boolean
     onPlayStarted?: () => void
     onTimeUpdate?: (time: number) => void
@@ -36,6 +39,8 @@ export interface AudioPlayerHandle {
 export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(function AudioPlayer({
     audioUrl,
     filename,
+    waveformData,
+    deferLoadUntilWaveformReady = false,
     autoplay,
     onPlayStarted,
     onTimeUpdate,
@@ -103,6 +108,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 
     // Main effect: Initialize WaveSurfer and load audio when audioUrl changes
     useEffect(() => {
+        if (deferLoadUntilWaveformReady) return
         if (!containerRef.current || !audioUrl) return
 
         // If we already have WaveSurfer and it's the same URL, skip
@@ -113,6 +119,8 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
         // Cleanup previous instance if exists
         if (wavesurferRef.current) {
             stopPolling()
+            setIsPlaying(false)
+            onPlayingChangeRef.current?.(false)
             wavesurferRef.current.destroy()
             wavesurferRef.current = null
         }
@@ -208,7 +216,9 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
         })
 
         // Load the audio - catch AbortError which happens when component unmounts during load
-        ws.load(audioUrl).catch((e) => {
+        const peaks = waveformData?.peaks ? [waveformData.peaks] : undefined
+        const waveformDuration = waveformData?.duration
+        ws.load(audioUrl, peaks, waveformDuration).catch((e) => {
             if (e instanceof Error && e.name === 'AbortError') return
             console.error("WaveSurfer load error:", e)
         })
@@ -216,10 +226,12 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
         // Cleanup on unmount or URL change
         return () => {
             stopPolling()
+            setIsPlaying(false)
+            onPlayingChangeRef.current?.(false)
             ws.destroy()
             wavesurferRef.current = null
         }
-    }, [audioUrl])
+    }, [audioUrl, deferLoadUntilWaveformReady, waveformData])
 
     // Update wavesurfer colors when accentColor changes
     useEffect(() => {
