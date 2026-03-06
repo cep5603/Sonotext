@@ -259,6 +259,23 @@ export function HistorySidebar({ onSelectItem, activeDragId, playingItemId, onPa
     const [autoRenameErrors, setAutoRenameErrors] = useState<Set<string>>(new Set())
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set())
+    const [isSearchFocused, setIsSearchFocused] = useState(false)
+    const searchInputRef = useRef<HTMLInputElement>(null)
+
+    // Focus search input on "/" or "\" keypress (when not already in an input)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== "/" && e.key !== "\\") return
+
+            const tag = (e.target as HTMLElement).tagName
+            if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement).isContentEditable) return
+
+            e.preventDefault()
+            searchInputRef.current?.focus()
+        }
+        window.addEventListener("keydown", handleKeyDown)
+        return () => window.removeEventListener("keydown", handleKeyDown)
+    }, [])
 
     // Query LLM availability
     const { data: llmStatus } = useQuery({
@@ -488,14 +505,17 @@ export function HistorySidebar({ onSelectItem, activeDragId, playingItemId, onPa
                 <div className="relative flex-1">
                     <MagnifyingGlassIcon size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                     <Input
+                        ref={searchInputRef}
                         type="text"
                         placeholder="Search..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
+                        onFocus={() => setIsSearchFocused(true)}
+                        onBlur={() => setIsSearchFocused(false)}
                         className="h-8 pl-8 pr-8 text-sm"
                         aria-label="Search history"
                     />
-                    {searchQuery && (
+                    {searchQuery ? (
                         <button
                             type="button"
                             onClick={() => setSearchQuery("")}
@@ -504,6 +524,8 @@ export function HistorySidebar({ onSelectItem, activeDragId, playingItemId, onPa
                         >
                             <XIcon size={16} className="text-muted-foreground" />
                         </button>
+                    ) : !isSearchFocused && (
+                        <kbd className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none select-none text-[12px] font-medium text-muted-foreground/80 bg-muted/40 border border-border rounded px-1.5 py-0.5 leading-none">/</kbd>
                     )}
                 </div>
                 {/* Project filter */}
