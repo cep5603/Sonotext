@@ -33,5 +33,5 @@ Or double-click `start_app.bat`.
 ### LM Studio Integration
 
 1. Install [LM Studio](https://lmstudio.ai/).
-2. Load a model (I usually use `gemma-3-4b`) and start the local server (default is `http://localhost:1234`).
+2. Load a model and start the local server (default is `http://localhost:1234`).
 3. The text cleanup feature should automatically connect after a bit.
