@@ -312,7 +312,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
     if (!audioUrl) return null
 
     return (
-        <div className="w-full space-y-2 rounded-lg border bg-card/30 p-4 animate-in fade-in zoom-in-95 duration-300">
+        <div className="w-full space-y-2 rounded-lg border bg-card/10 p-4 animate-in fade-in zoom-in-95 duration-300">
             {/* Filename display */}
             {filename && (
                 <div className="text-sm font-medium text-muted-foreground truncate">

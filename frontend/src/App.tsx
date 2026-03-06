@@ -19,7 +19,7 @@ function InnerApp() {
   }
 
   return (
-    <div className="h-screen bg-background text-foreground overflow-hidden">
+    <div className="h-screen bg-transparent text-foreground overflow-hidden">
       <TextToSpeech
         selectedItem={selectedItem}
         onSelectedItemChange={setSelectedItem}

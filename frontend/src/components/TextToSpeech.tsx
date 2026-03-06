@@ -682,7 +682,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                             <AnimatedLogo onClick={onLogoClick} />
                         </div>
                         <Card
-                            className="border shadow-2xl bg-card/80 backdrop-blur-xl flex-1 min-h-0 flex flex-col w-full transition-colors duration-200"
+                            className="border shadow-2xl bg-card/20 backdrop-blur-sm flex-1 min-h-0 flex flex-col w-full transition-colors duration-200"
                             style={{
                                 borderColor: activeProjectColor ? `${activeProjectColor}33` : undefined,
                                 backgroundColor: activeProjectColor ? `${activeProjectColor}0A` : undefined,
