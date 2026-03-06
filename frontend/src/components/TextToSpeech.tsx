@@ -18,6 +18,7 @@ import { AudioPlayer, type AudioPlayerHandle } from "./AudioPlayer"
 import { SyncedTextView } from "./SyncedTextView"
 import { HistorySidebar } from "./HistorySidebar"
 import { SettingsSidebar } from "./SettingsSidebar"
+import { AnimatedLogo } from "./AnimatedLogo"
 import { ProjectsPanel } from "./ProjectsPanel"
 import { ProjectDetailView } from "./ProjectDetailView"
 import type { HistoryItem, WordTiming, Project, WaveformData } from "@/types"
@@ -53,9 +54,10 @@ interface TextToSpeechProps {
     selectedItem: HistoryItem | null
     onSelectedItemChange: (item: HistoryItem | null) => void
     resetToGeneratorToken: number
+    onLogoClick: () => void
 }
 
-export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGeneratorToken }: TextToSpeechProps) {
+export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGeneratorToken, onLogoClick }: TextToSpeechProps) {
     const CANCEL_CONFIRMATION_MS = 2500
     const [text, setText] = useState("")
     const [voice, setVoice] = useState("af_heart")
@@ -675,353 +677,358 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
             />
             <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
                 <div className="flex-1 min-w-0 min-h-0 h-full px-8 py-4">
-                    <Card
-                        className="border shadow-2xl bg-card/80 backdrop-blur-xl h-full flex flex-col max-w-4xl mx-auto transition-colors duration-200"
-                        style={{
-                            borderColor: activeProjectColor ? `${activeProjectColor}33` : undefined,
-                            backgroundColor: activeProjectColor ? `${activeProjectColor}0A` : undefined,
-                            ...(activeProjectColor ? { '--primary': hexToHsl(activeProjectColor) } as React.CSSProperties : {}),
-                        }}
-                    >
-                        <CardContent className="p-8 space-y-6 flex-1 flex flex-col overflow-hidden">
+                    <div className="h-full max-w-4xl mx-auto flex flex-col gap-4">
+                        <div className="shrink-0 flex justify-center">
+                            <AnimatedLogo onClick={onLogoClick} />
+                        </div>
+                        <Card
+                            className="border shadow-2xl bg-card/80 backdrop-blur-xl flex-1 min-h-0 flex flex-col w-full transition-colors duration-200"
+                            style={{
+                                borderColor: activeProjectColor ? `${activeProjectColor}33` : undefined,
+                                backgroundColor: activeProjectColor ? `${activeProjectColor}0A` : undefined,
+                                ...(activeProjectColor ? { '--primary': hexToHsl(activeProjectColor) } as React.CSSProperties : {}),
+                            }}
+                        >
+                            <CardContent className="p-8 space-y-6 flex-1 flex flex-col overflow-hidden">
 
-                            {/* Breadcrumb Navigation */}
-                            <nav className="flex items-center gap-2 text-lg flex-wrap">
-                                {/* Generator - always shown */}
-                                {viewMode === "generator" ? (
-                                    <>
-                                        <span className="text-foreground font-medium">Generator</span>
-                                        <span className="text-muted-foreground/50">/</span>
-                                        <button
-                                            onClick={goToProjects}
-                                            className="text-muted-foreground hover:text-foreground transition-colors"
-                                        >
-                                            Projects
-                                        </button>
-                                    </>
-                                ) : (
-                                    <button
-                                        onClick={goToGenerator}
-                                        className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                                    >
-                                        <ArrowLeftIcon size={16} />
-                                        Generator
-                                    </button>
-                                )}
-
-                                {/* Projects */}
-                                {(viewMode === "projects" || viewMode === "projectDetail" || (viewMode === "detail" && sourceProjectId)) && (
-                                    <>
-                                        <span className="text-muted-foreground/50">/</span>
-                                        {viewMode === "projects" ? (
-                                            <span className="text-foreground font-medium">Projects</span>
-                                        ) : (
+                                {/* Breadcrumb Navigation */}
+                                <nav className="flex items-center gap-2 text-lg flex-wrap">
+                                    {/* Generator - always shown */}
+                                    {viewMode === "generator" ? (
+                                        <>
+                                            <span className="text-foreground font-medium">Generator</span>
+                                            <span className="text-muted-foreground/50">/</span>
                                             <button
                                                 onClick={goToProjects}
-                                                className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                                className="text-muted-foreground hover:text-foreground transition-colors"
                                             >
-                                                <ArrowLeftIcon size={16} />
                                                 Projects
                                             </button>
-                                        )}
-                                    </>
-                                )}
+                                        </>
+                                    ) : (
+                                        <button
+                                            onClick={goToGenerator}
+                                            className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                        >
+                                            <ArrowLeftIcon size={16} />
+                                            Generator
+                                        </button>
+                                    )}
 
-                                {/* Project Name */}
-                                {(viewMode === "projectDetail" || (viewMode === "detail" && sourceProjectId)) && activeProjectName && (
-                                    <>
-                                        <span style={{ color: activeProjectColor || undefined }} className={activeProjectColor ? 'opacity-70' : 'text-muted-foreground/50'}>/</span>
-                                        {viewMode === "projectDetail" ? (
-                                            <span
-                                                className="font-medium"
-                                                style={{ color: activeProjectColor || undefined }}
-                                            >
-                                                {activeProjectName}
-                                            </span>
-                                        ) : (
-                                            <button
-                                                onClick={() => {
-                                                    if (sourceProjectId) {
-                                                        onSelectedItemChange(null)
-                                                        setActiveProjectId(sourceProjectId)
-                                                        setViewMode("projectDetail")
-                                                        setSourceProjectId(null)
-                                                    }
-                                                }}
-                                                className="hover:text-foreground transition-colors flex items-center gap-1"
-                                            >
-                                                <ArrowLeftIcon size={16} style={{ color: activeProjectColor || undefined }} />
-                                                <span style={{ color: activeProjectColor || undefined }} className={activeProjectColor ? 'opacity-70' : 'text-muted-foreground'}>
+                                    {/* Projects */}
+                                    {(viewMode === "projects" || viewMode === "projectDetail" || (viewMode === "detail" && sourceProjectId)) && (
+                                        <>
+                                            <span className="text-muted-foreground/50">/</span>
+                                            {viewMode === "projects" ? (
+                                                <span className="text-foreground font-medium">Projects</span>
+                                            ) : (
+                                                <button
+                                                    onClick={goToProjects}
+                                                    className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                                >
+                                                    <ArrowLeftIcon size={16} />
+                                                    Projects
+                                                </button>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {/* Project Name */}
+                                    {(viewMode === "projectDetail" || (viewMode === "detail" && sourceProjectId)) && activeProjectName && (
+                                        <>
+                                            <span style={{ color: activeProjectColor || undefined }} className={activeProjectColor ? 'opacity-70' : 'text-muted-foreground/50'}>/</span>
+                                            {viewMode === "projectDetail" ? (
+                                                <span
+                                                    className="font-medium"
+                                                    style={{ color: activeProjectColor || undefined }}
+                                                >
                                                     {activeProjectName}
                                                 </span>
-                                            </button>
-                                        )}
-                                    </>
-                                )}
+                                            ) : (
+                                                <button
+                                                    onClick={() => {
+                                                        if (sourceProjectId) {
+                                                            onSelectedItemChange(null)
+                                                            setActiveProjectId(sourceProjectId)
+                                                            setViewMode("projectDetail")
+                                                            setSourceProjectId(null)
+                                                        }
+                                                    }}
+                                                    className="hover:text-foreground transition-colors flex items-center gap-1"
+                                                >
+                                                    <ArrowLeftIcon size={16} style={{ color: activeProjectColor || undefined }} />
+                                                    <span style={{ color: activeProjectColor || undefined }} className={activeProjectColor ? 'opacity-70' : 'text-muted-foreground'}>
+                                                        {activeProjectName}
+                                                    </span>
+                                                </button>
+                                            )}
+                                        </>
+                                    )}
 
-                                {/* Current detail item name */}
-                                {viewMode === "detail" && selectedItem && (
-                                    <>
-                                        <span className="text-muted-foreground/50">/</span>
-                                        <span className="text-foreground font-medium truncate max-w-[400px]">
+                                    {/* Current detail item name */}
+                                    {viewMode === "detail" && selectedItem && (
+                                        <>
+                                            <span className="text-muted-foreground/50">/</span>
+                                            <span className="text-foreground font-medium truncate max-w-[400px]">
+                                                {selectedItem.filename
+                                                    .split('/').pop()?.replace(/\.wav$/, '').replace(/-[a-f0-9]{8}$/, '').replace(/-/g, ' ')
+                                                    || 'Untitled'}
+                                            </span>
+                                        </>
+                                    )}
+                                </nav>
+
+                                {/* Detail View - shows when a history item is selected */}
+                                {viewMode === "detail" && selectedItem ? (
+                                    <div className="flex-1 flex flex-col space-y-4 animate-in fade-in duration-200 min-h-0">
+
+                                        {/* Filename title */}
+                                        <h2 className="text-xl font-semibold tracking-tight">
                                             {selectedItem.filename
                                                 .split('/').pop()?.replace(/\.wav$/, '').replace(/-[a-f0-9]{8}$/, '').replace(/-/g, ' ')
                                                 || 'Untitled'}
-                                        </span>
-                                    </>
-                                )}
-                            </nav>
+                                        </h2>
 
-                            {/* Detail View - shows when a history item is selected */}
-                            {viewMode === "detail" && selectedItem ? (
-                                <div className="flex-1 flex flex-col space-y-4 animate-in fade-in duration-200 min-h-0">
-
-                                    {/* Filename title */}
-                                    <h2 className="text-xl font-semibold tracking-tight">
-                                        {selectedItem.filename
-                                            .split('/').pop()?.replace(/\.wav$/, '').replace(/-[a-f0-9]{8}$/, '').replace(/-/g, ' ')
-                                            || 'Untitled'}
-                                    </h2>
-
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                            <span className="font-medium text-foreground">{formatVoiceDisplay(selectedItem.voice, selectedItem.voice_profile_id)}</span>
-                                            {selectedItem.model && (
-                                                <>
-                                                    <span>•</span>
-                                                    <span>{selectedItem.model}</span>
-                                                </>
-                                            )}
-                                            <span>•</span>
-                                            <span>{selectedItem.speed}x</span>
-                                            <span>•</span>
-                                            <span className="flex items-center gap-1">
-                                                <ClockIcon size={16} />
-                                                {formatDuration(selectedItem.duration)}
-                                            </span>
-                                            <span>•</span>
-                                            <span>{new Date(selectedItem.timestamp * 1000).toLocaleString()}</span>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                                <span className="font-medium text-foreground">{formatVoiceDisplay(selectedItem.voice, selectedItem.voice_profile_id)}</span>
+                                                {selectedItem.model && (
+                                                    <>
+                                                        <span>•</span>
+                                                        <span>{selectedItem.model}</span>
+                                                    </>
+                                                )}
+                                                <span>•</span>
+                                                <span>{selectedItem.speed}x</span>
+                                                <span>•</span>
+                                                <span className="flex items-center gap-1">
+                                                    <ClockIcon size={16} />
+                                                    {formatDuration(selectedItem.duration)}
+                                                </span>
+                                                <span>•</span>
+                                                <span>{new Date(selectedItem.timestamp * 1000).toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={async () => {
+                                                        await navigator.clipboard.writeText(selectedItem.text)
+                                                        setCopied(true)
+                                                        setTimeout(() => setCopied(false), 1500)
+                                                    }}
+                                                    className="gap-2 text-xs"
+                                                >
+                                                    {copied ? <CheckIcon size={16} /> : <CopyIcon size={16} />}
+                                                    {copied ? "Copied!" : "Copy"}
+                                                </Button>
+                                                <Button
+                                                    variant={autoScroll ? "secondary" : "ghost"}
+                                                    size="sm"
+                                                    onClick={() => setAutoScroll(!autoScroll)}
+                                                    className="gap-2 text-xs"
+                                                >
+                                                    <ArrowsDownUpIcon size={16} />
+                                                    <span className="w-[5rem] text-left">{autoScroll ? "Auto-scroll On" : "Auto-scroll Off"}</span>
+                                                </Button>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={async () => {
-                                                    await navigator.clipboard.writeText(selectedItem.text)
-                                                    setCopied(true)
-                                                    setTimeout(() => setCopied(false), 1500)
-                                                }}
-                                                className="gap-2 text-xs"
-                                            >
-                                                {copied ? <CheckIcon size={16} /> : <CopyIcon size={16} />}
-                                                {copied ? "Copied!" : "Copy"}
-                                            </Button>
-                                            <Button
-                                                variant={autoScroll ? "secondary" : "ghost"}
-                                                size="sm"
-                                                onClick={() => setAutoScroll(!autoScroll)}
-                                                className="gap-2 text-xs"
-                                            >
-                                                <ArrowsDownUpIcon size={16} />
-                                                <span className="w-[5rem] text-left">{autoScroll ? "Auto-scroll On" : "Auto-scroll Off"}</span>
-                                            </Button>
-                                        </div>
-                                    </div>
 
-                                    <SyncedTextView
-                                        text={selectedItem.text}
-                                        alignmentData={alignmentData}
-                                        currentTimeRef={audioCurrentTimeRef}
-                                        onSeek={handleSeek}
-                                        isPlaying={isAudioPlaying}
-                                        autoScroll={autoScroll}
-                                    />
-
-                                    <AudioPlayer
-                                        ref={audioPlayerRef}
-                                        audioUrl={selectedItem.url.startsWith('http') ? selectedItem.url : `http://localhost:8000${selectedItem.url}`}
-                                        filename={selectedItem.filename}
-                                        waveformData={waveformData}
-                                        deferLoadUntilWaveformReady={!isWaveformDataResolved}
-                                        autoplay={shouldAutoplay}
-                                        onPlayStarted={() => setShouldAutoplay(false)}
-                                        onTimeUpdate={(t) => { audioCurrentTimeRef.current = t }}
-                                        onPlayingChange={setIsAudioPlaying}
-                                        seekToTime={seekToTime}
-                                        accentColor={activeProjectColor}
-                                    />
-                                </div>
-
-                            ) : viewMode === "projects" ? (
-                                /* Projects Grid View */
-                                <ProjectsPanel onOpenProject={goToProjectDetail} />
-
-                            ) : viewMode === "projectDetail" && activeProjectId ? (
-                                /* Project Detail View */
-                                <ProjectDetailView
-                                    projectId={activeProjectId}
-                                    projectColor={activeProjectColor}
-                                    onSelectGeneration={handleSelectFromProject}
-                                />
-
-                            ) : (
-                                /* Generator View - normal text input and controls */
-                                <>
-                                    <div
-                                        className={cn(
-                                            "relative rounded-xl border-2 border-dashed transition-all duration-300 ease-in-out p-1 flex-1 min-h-0 flex flex-col",
-                                            isDragging ? "border-primary bg-primary/10 scale-[1.01]" : "border-muted-foreground/20 hover:border-primary/50"
-                                        )}
-                                        onDragOver={handleDragOver}
-                                        onDragLeave={handleDragLeave}
-                                        onDrop={handleDrop}
-                                    >
-                                        <Textarea
-                                            placeholder="Paste text here or drag & drop a PDF..."
-                                            className="flex-1 min-h-0 resize-none text-lg p-6 bg-transparent border-none focus-visible:ring-0"
-                                            value={text}
-                                            onChange={(e) => setText(e.target.value)}
+                                        <SyncedTextView
+                                            text={selectedItem.text}
+                                            alignmentData={alignmentData}
+                                            currentTimeRef={audioCurrentTimeRef}
+                                            onSeek={handleSeek}
+                                            isPlaying={isAudioPlaying}
+                                            autoScroll={autoScroll}
                                         />
 
-                                        {isDragging && (
-                                            <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
-                                                <div className="text-center space-y-2 animate-bounce">
-                                                    <FileArrowUpIcon size={48} className="mx-auto text-primary" />
-                                                    <p className="text-lg font-medium text-primary">Drop PDF to extract text</p>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {!text && !isDragging && (
-                                            <div className="absolute bottom-4 right-4 text-xs text-muted-foreground flex items-center gap-2">
-                                                <FileTextIcon size={16} />
-                                                <span>Drag PDF or</span>
-                                                <label className="cursor-pointer hover:text-primary underline">
-                                                    browse
-                                                    <input type="file" accept=".pdf" className="hidden" onChange={handleFileSelect} />
-                                                </label>
-                                            </div>
-                                        )}
+                                        <AudioPlayer
+                                            ref={audioPlayerRef}
+                                            audioUrl={selectedItem.url.startsWith('http') ? selectedItem.url : `http://localhost:8000${selectedItem.url}`}
+                                            filename={selectedItem.filename}
+                                            waveformData={waveformData}
+                                            deferLoadUntilWaveformReady={!isWaveformDataResolved}
+                                            autoplay={shouldAutoplay}
+                                            onPlayStarted={() => setShouldAutoplay(false)}
+                                            onTimeUpdate={(t) => { audioCurrentTimeRef.current = t }}
+                                            onPlayingChange={setIsAudioPlaying}
+                                            seekToTime={seekToTime}
+                                            accentColor={activeProjectColor}
+                                        />
                                     </div>
 
-                                    {/* Cleanup Progress Bar */}
-                                    {(isCleaning || cleanupStats) && (
-                                        <div className="space-y-2 animate-in fade-in duration-300 flex-shrink-0">
-                                            <div className="flex justify-between text-sm text-muted-foreground">
-                                                <span>{cleanupProgressText}</span>
-                                                <span>{cleanupProgress}%</span>
-                                            </div>
-                                            <Progress value={cleanupProgress} className="h-2" />
-                                            {cleanupStats && !isCleaning && (
-                                                <div className="text-xs text-muted-foreground text-right">
-                                                    {cleanupStats.totalSeconds.toFixed(2)}s total • {cleanupStats.avgPerChunk.toFixed(2)}s/chunk
+                                ) : viewMode === "projects" ? (
+                                    /* Projects Grid View */
+                                    <ProjectsPanel onOpenProject={goToProjectDetail} />
+
+                                ) : viewMode === "projectDetail" && activeProjectId ? (
+                                    /* Project Detail View */
+                                    <ProjectDetailView
+                                        projectId={activeProjectId}
+                                        projectColor={activeProjectColor}
+                                        onSelectGeneration={handleSelectFromProject}
+                                    />
+
+                                ) : (
+                                    /* Generator View - normal text input and controls */
+                                    <>
+                                        <div
+                                            className={cn(
+                                                "relative rounded-xl border-2 border-dashed transition-all duration-300 ease-in-out p-1 flex-1 min-h-0 flex flex-col",
+                                                isDragging ? "border-primary bg-primary/10 scale-[1.01]" : "border-muted-foreground/20 hover:border-primary/50"
+                                            )}
+                                            onDragOver={handleDragOver}
+                                            onDragLeave={handleDragLeave}
+                                            onDrop={handleDrop}
+                                        >
+                                            <Textarea
+                                                placeholder="Paste text here or drag & drop a PDF..."
+                                                className="flex-1 min-h-0 resize-none text-lg p-6 bg-transparent border-none focus-visible:ring-0"
+                                                value={text}
+                                                onChange={(e) => setText(e.target.value)}
+                                            />
+
+                                            {isDragging && (
+                                                <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
+                                                    <div className="text-center space-y-2 animate-bounce">
+                                                        <FileArrowUpIcon size={48} className="mx-auto text-primary" />
+                                                        <p className="text-lg font-medium text-primary">Drop PDF to extract text</p>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {!text && !isDragging && (
+                                                <div className="absolute bottom-4 right-4 text-xs text-muted-foreground flex items-center gap-2">
+                                                    <FileTextIcon size={16} />
+                                                    <span>Drag PDF or</span>
+                                                    <label className="cursor-pointer hover:text-primary underline">
+                                                        browse
+                                                        <input type="file" accept=".pdf" className="hidden" onChange={handleFileSelect} />
+                                                    </label>
                                                 </div>
                                             )}
                                         </div>
-                                    )}
 
-                                    <div className="flex justify-end gap-3 flex-shrink-0">
-                                        <div className="flex">
-                                            <Button
-                                                variant={isCleaning && cancelConfirmTarget === "clean" ? "destructive" : "secondary"}
-                                                size="lg"
-                                                className="h-12 text-lg rounded-r-none"
-                                                onClick={handleCleanButtonClick}
-                                                disabled={isGenerating || (!text && !isCleaning)}
-                                            >
-                                                {isCleaning ? (
-                                                    cancelConfirmTarget === "clean" ? "Confirm Cancel" : "Cancel"
-                                                ) : (
-                                                    "Clean Text"
-                                                )}
-                                            </Button>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                        variant="secondary"
-                                                        size="lg"
-                                                        className="h-12 px-2 rounded-l-none border-l border-secondary-foreground/20"
-                                                        disabled={!text || isCleaning || isGenerating}
-                                                    >
-                                                        <CaretDownIcon size={16} />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={handleCleanText}>
-                                                        <SparkleIcon size={16} className="mr-2" />
-                                                        LLM Clean
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
-                                        <div className="flex">
-                                            <Button
-                                                size="lg"
-                                                className="min-w-[160px] text-lg h-12 rounded-r-none"
-                                                variant={isGenerating && cancelConfirmTarget === "generate" ? "destructive" : "default"}
-                                                onClick={handleGenerateButtonClick}
-                                                disabled={isCleaning || (!text && !isGenerating)}
-                                            >
-                                                {isGenerating ? (
-                                                    cancelConfirmTarget === "generate" ? "Confirm Cancel" : "Cancel"
-                                                ) : (
-                                                    "Generate Audio"
-                                                )}
-                                            </Button>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                        size="lg"
-                                                        className="h-12 px-2 rounded-l-none border-l border-primary-foreground/20"
-                                                        disabled={!text || isGenerating || isCleaning}
-                                                    >
-                                                        <CaretDownIcon size={16} />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={handleCleanAndGenerate}>
-                                                        <SparkleIcon size={16} className="mr-2" />
-                                                        LLM Clean & Generate
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
-                                    </div>
-
-                                    {/* Progress Bar */}
-                                    {(isGenerating || generationStats) && (
-                                        <div className="space-y-2 animate-in fade-in duration-300 flex-shrink-0">
-                                            <div className="flex justify-between text-sm text-muted-foreground">
-                                                <span>{progressText}</span>
-                                                <span>{progress}%</span>
-                                            </div>
-                                            <Progress value={progress} className="h-2" />
-                                            {generationStats && !isGenerating && (
-                                                <div className="text-xs text-muted-foreground text-right">
-                                                    {generationStats.totalSeconds.toFixed(2)}s total • {generationStats.avgPerChunk.toFixed(2)}s/chunk
+                                        {/* Cleanup Progress Bar */}
+                                        {(isCleaning || cleanupStats) && (
+                                            <div className="space-y-2 animate-in fade-in duration-300 flex-shrink-0">
+                                                <div className="flex justify-between text-sm text-muted-foreground">
+                                                    <span>{cleanupProgressText}</span>
+                                                    <span>{cleanupProgress}%</span>
                                                 </div>
-                                            )}
-                                        </div>
-                                    )}
+                                                <Progress value={cleanupProgress} className="h-2" />
+                                                {cleanupStats && !isCleaning && (
+                                                    <div className="text-xs text-muted-foreground text-right">
+                                                        {cleanupStats.totalSeconds.toFixed(2)}s total • {cleanupStats.avgPerChunk.toFixed(2)}s/chunk
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
 
-                                    {error && (
-                                        <div className="p-4 rounded-md bg-destructive/10 text-destructive text-sm text-center flex-shrink-0">
-                                            {error}
+                                        <div className="flex justify-end gap-3 flex-shrink-0">
+                                            <div className="flex">
+                                                <Button
+                                                    variant={isCleaning && cancelConfirmTarget === "clean" ? "destructive" : "secondary"}
+                                                    size="lg"
+                                                    className="h-12 text-lg rounded-r-none"
+                                                    onClick={handleCleanButtonClick}
+                                                    disabled={isGenerating || (!text && !isCleaning)}
+                                                >
+                                                    {isCleaning ? (
+                                                        cancelConfirmTarget === "clean" ? "Confirm Cancel" : "Cancel"
+                                                    ) : (
+                                                        "Clean Text"
+                                                    )}
+                                                </Button>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                            variant="secondary"
+                                                            size="lg"
+                                                            className="h-12 px-2 rounded-l-none border-l border-secondary-foreground/20"
+                                                            disabled={!text || isCleaning || isGenerating}
+                                                        >
+                                                            <CaretDownIcon size={16} />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={handleCleanText}>
+                                                            <SparkleIcon size={16} className="mr-2" />
+                                                            LLM Clean
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                            <div className="flex">
+                                                <Button
+                                                    size="lg"
+                                                    className="min-w-[160px] text-lg h-12 rounded-r-none"
+                                                    variant={isGenerating && cancelConfirmTarget === "generate" ? "destructive" : "default"}
+                                                    onClick={handleGenerateButtonClick}
+                                                    disabled={isCleaning || (!text && !isGenerating)}
+                                                >
+                                                    {isGenerating ? (
+                                                        cancelConfirmTarget === "generate" ? "Confirm Cancel" : "Cancel"
+                                                    ) : (
+                                                        "Generate Audio"
+                                                    )}
+                                                </Button>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                            size="lg"
+                                                            className="h-12 px-2 rounded-l-none border-l border-primary-foreground/20"
+                                                            disabled={!text || isGenerating || isCleaning}
+                                                        >
+                                                            <CaretDownIcon size={16} />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={handleCleanAndGenerate}>
+                                                            <SparkleIcon size={16} className="mr-2" />
+                                                            LLM Clean & Generate
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
                                         </div>
-                                    )}
 
-                                    {pdfMutation.isPending && (
-                                        <div className="flex items-center justify-center gap-2 text-muted-foreground animate-pulse flex-shrink-0">
-                                            <SpinnerGapIcon size={16} className="animate-spin" />
-                                            <span>Extracting text from PDF...</span>
-                                        </div>
-                                    )}
+                                        {/* Progress Bar */}
+                                        {(isGenerating || generationStats) && (
+                                            <div className="space-y-2 animate-in fade-in duration-300 flex-shrink-0">
+                                                <div className="flex justify-between text-sm text-muted-foreground">
+                                                    <span>{progressText}</span>
+                                                    <span>{progress}%</span>
+                                                </div>
+                                                <Progress value={progress} className="h-2" />
+                                                {generationStats && !isGenerating && (
+                                                    <div className="text-xs text-muted-foreground text-right">
+                                                        {generationStats.totalSeconds.toFixed(2)}s total • {generationStats.avgPerChunk.toFixed(2)}s/chunk
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
 
-                                    <AudioPlayer audioUrl={audioUrl} filename={audioFilename} accentColor={activeProjectColor} />
-                                </>
-                            )}
-                        </CardContent>
-                    </Card>
+                                        {error && (
+                                            <div className="p-4 rounded-md bg-destructive/10 text-destructive text-sm text-center flex-shrink-0">
+                                                {error}
+                                            </div>
+                                        )}
+
+                                        {pdfMutation.isPending && (
+                                            <div className="flex items-center justify-center gap-2 text-muted-foreground animate-pulse flex-shrink-0">
+                                                <SpinnerGapIcon size={16} className="animate-spin" />
+                                                <span>Extracting text from PDF...</span>
+                                            </div>
+                                        )}
+
+                                        <AudioPlayer audioUrl={audioUrl} filename={audioFilename} accentColor={activeProjectColor} />
+                                    </>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
 
                 <HistorySidebar onSelectItem={handleSelectItem} activeDragId={activeDragId} playingItemId={isAudioPlaying ? selectedItem?.id ?? null : null} onPauseItem={() => audioPlayerRef.current?.togglePlay()} />

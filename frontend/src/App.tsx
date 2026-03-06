@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TextToSpeech } from './components/TextToSpeech'
-import { AnimatedLogo } from './components/AnimatedLogo'
 import { useStatusStream } from './hooks/useStatusStream'
 import type { HistoryItem } from './types'
 
@@ -20,17 +19,13 @@ function InnerApp() {
   }
 
   return (
-    <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
-      <header className="text-center py-4 shrink-0 border-b border-border">
-        <AnimatedLogo onClick={handleLogoClick} />
-      </header>
-      <main className="flex-1 w-full min-h-0">
-        <TextToSpeech
-          selectedItem={selectedItem}
-          onSelectedItemChange={setSelectedItem}
-          resetToGeneratorToken={logoResetToken}
-        />
-      </main>
+    <div className="h-screen bg-background text-foreground overflow-hidden">
+      <TextToSpeech
+        selectedItem={selectedItem}
+        onSelectedItemChange={setSelectedItem}
+        resetToGeneratorToken={logoResetToken}
+        onLogoClick={handleLogoClick}
+      />
     </div>
   )
 }
