@@ -12,6 +12,15 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
 import { AudioPlayer, type AudioPlayerHandle } from "./AudioPlayer"
@@ -22,7 +31,7 @@ import { AnimatedLogo } from "./AnimatedLogo"
 import { ProjectsPanel } from "./ProjectsPanel"
 import { ProjectDetailView } from "./ProjectDetailView"
 import { VoiceSourceIcon } from "./VoiceSourceIcon"
-import type { HistoryItem, WordTiming, Project, WaveformData } from "@/types"
+import type { HistoryItem, WordTiming, Project, WaveformData, VoiceProfile } from "@/types"
 import { cn } from "@/lib/utils"
 import { formatVoiceDisplay } from "@/lib/voiceData"
 
@@ -32,6 +41,18 @@ function formatDuration(seconds?: number): string {
     const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, '0')}`
 }
+
+const QWEN3_SPEAKER_IDS = new Set([
+    "aiden",
+    "dylan",
+    "eric",
+    "ryan",
+    "serena",
+    "vivian",
+    "uncle_fu",
+    "ono_anna",
+    "sohee",
+])
 
 /** Convert a hex color (#RRGGBB) to the "H S% L%" format used by CSS variables */
 function hexToHsl(hex: string): string {
@@ -97,6 +118,8 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
     const cancelConfirmTimeoutRef = useRef<number | null>(null)
     const generateAbortControllerRef = useRef<AbortController | null>(null)
     const cleanupAbortControllerRef = useRef<AbortController | null>(null)
+    const suppressEngineDefaultsRef = useRef(false)
+    const [missingProfileWarning, setMissingProfileWarning] = useState<string | null>(null)
     const queryClient = useQueryClient()
 
     // View state
@@ -242,6 +265,10 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
 
     // Switch to appropriate default voice when engine changes
     useEffect(() => {
+        if (suppressEngineDefaultsRef.current) {
+            suppressEngineDefaultsRef.current = false
+            return
+        }
         if (engine === "qwen3") {
             setVoice("aiden")
         } else {
@@ -592,6 +619,60 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
         handleSelectItem(item, autoplay)
     }
 
+    const applySelectedItemSettingsToPrompt = useCallback((item: HistoryItem) => {
+        const resolvedEngine = item.engine ?? (item.model?.toLowerCase().includes("qwen") ? "qwen3" : "kokoro")
+        suppressEngineDefaultsRef.current = true
+        setEngine(resolvedEngine)
+        setLang(item.lang ?? null)
+        setSpeed([item.speed ?? 1.0])
+        setChunkSize([item.chunk_size ?? 500])
+
+        if (resolvedEngine === "qwen3") {
+            setInstruct(item.instruct ?? "")
+            const fallbackQwenSpeaker = "aiden"
+
+            if (item.voice_profile_id) {
+                const profiles = queryClient.getQueryData<VoiceProfile[]>(["voice-profiles"])
+                const profileExists = profiles?.some((p) => p.id === item.voice_profile_id)
+                if (profileExists) {
+                    setVoiceProfileId(item.voice_profile_id)
+                    setVoice(fallbackQwenSpeaker)
+                } else {
+                    setVoiceProfileId(null)
+                    setVoice(fallbackQwenSpeaker)
+                    setMissingProfileWarning(item.voice_profile_id)
+                }
+            } else {
+                const restoredSpeaker = item.voice?.trim().toLowerCase()
+                const hasValidBuiltInSpeaker = !!restoredSpeaker && QWEN3_SPEAKER_IDS.has(restoredSpeaker)
+                setVoiceProfileId(null)
+                setVoice(hasValidBuiltInSpeaker ? restoredSpeaker : fallbackQwenSpeaker)
+                if (item.voice && !hasValidBuiltInSpeaker) {
+                    setMissingProfileWarning(item.voice)
+                }
+            }
+            return
+        }
+
+        setInstruct("")
+        setVoiceProfileId(null)
+        setVoice(item.voice || "af_heart")
+    }, [queryClient])
+
+    const handleCopyCurrentText = useCallback(async () => {
+        if (!selectedItem) return
+        await navigator.clipboard.writeText(selectedItem.text)
+        setCopied(true)
+        window.setTimeout(() => setCopied(false), 1500)
+    }, [selectedItem])
+
+    const handleCopyAllToPrompt = useCallback(() => {
+        if (!selectedItem) return
+        setText(selectedItem.text)
+        applySelectedItemSettingsToPrompt(selectedItem)
+        goToGenerator()
+    }, [applySelectedItemSettingsToPrompt, selectedItem])
+
     // Fetch alignment data when a history item is selected
     useEffect(() => {
         if (!selectedItem) return
@@ -813,19 +894,34 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                                 <span>{new Date(selectedItem.timestamp * 1000).toLocaleString()}</span>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={async () => {
-                                                        await navigator.clipboard.writeText(selectedItem.text)
-                                                        setCopied(true)
-                                                        setTimeout(() => setCopied(false), 1500)
-                                                    }}
-                                                    className="gap-2 text-xs"
-                                                >
-                                                    {copied ? <CheckIcon size={16} /> : <CopyIcon size={16} />}
-                                                    {copied ? "Copied!" : "Copy"}
-                                                </Button>
+                                                <div className="flex">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={handleCopyCurrentText}
+                                                        className="gap-2 text-xs rounded-r-none"
+                                                    >
+                                                        {copied ? <CheckIcon size={16} /> : <CopyIcon size={16} />}
+                                                        {copied ? "Copied!" : "Copy"}
+                                                    </Button>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="px-2 rounded-l-none border-l border-border"
+                                                            >
+                                                                <CaretDownIcon size={16} />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuItem onClick={handleCopyAllToPrompt}>
+                                                                <FileTextIcon size={16} className="mr-2" />
+                                                                Copy All to Prompt
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </div>
                                                 <Button
                                                     variant={autoScroll ? "secondary" : "ghost"}
                                                     size="sm"
@@ -1044,6 +1140,23 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                     )}
                 </DragOverlay>
             </DndContext >
+
+            {/* Warning dialog when a restored voice profile no longer exists */}
+            <AlertDialog open={!!missingProfileWarning} onOpenChange={(open) => { if (!open) setMissingProfileWarning(null) }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Custom Voice Unavailable</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            The custom voice profile used for this generation has been deleted or is no longer available. The voice has been reset to the default speaker.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="mt-4">
+                        <AlertDialogAction onClick={() => setMissingProfileWarning(null)}>
+                            OK
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div >
     )
 }

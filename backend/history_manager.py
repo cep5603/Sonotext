@@ -59,7 +59,7 @@ class HistoryManager:
     def get_waveform_path(self, audio_path: str) -> str:
         return os.path.splitext(audio_path)[0] + ".waveform.json"
 
-    def add_entry(self, text: str, voice: str, speed: float, filename: str, duration: float, model: str = "kokoro", voice_profile_id: str | None = None) -> Dict:
+    def add_entry(self, text: str, voice: str, speed: float, filename: str, duration: float, model: str = "kokoro", voice_profile_id: str | None = None, engine: str = "kokoro", lang: str | None = None, instruct: str | None = None, chunk_size: int | None = None) -> Dict:
         with self._lock:  # Serialize modifications
             history = self._load_history()
             date_folder = self._get_date_folder()
@@ -75,6 +75,10 @@ class HistoryManager:
                 "timestamp": time.time(),
                 "url": f"/outputs/{relative_path}",
                 "model": model,
+                "engine": engine,
+                "lang": lang,
+                "instruct": instruct,
+                "chunk_size": chunk_size,
                 "voice_profile_id": voice_profile_id,  # Track profile for rename sync
             }
             history.insert(0, entry)

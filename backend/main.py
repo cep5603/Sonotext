@@ -856,7 +856,19 @@ async def generate_audio(req: GenerateRequest):
             else:
                 model_name = "Kokoro"
             
-            entry = history_manager.add_entry(req.text, voice_name, req.speed, filename, duration, model_name, req.voice_profile_id)
+            entry = history_manager.add_entry(
+                req.text,
+                voice_name,
+                req.speed,
+                filename,
+                duration,
+                model_name,
+                req.voice_profile_id,
+                req.engine,
+                req.lang,
+                req.instruct if req.engine == "qwen3" else None,
+                req.chunk_size,
+            )
             
             yield {
                 "event": "complete",

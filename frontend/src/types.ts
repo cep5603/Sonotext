@@ -8,6 +8,10 @@ export interface HistoryItem {
     timestamp: number
     url: string
     model?: string  // TTS engine used: "kokoro", "qwen3-1.7B"
+    engine?: "kokoro" | "qwen3"
+    lang?: string | null
+    instruct?: string | null
+    chunk_size?: number
     voice_profile_id?: string | null  // Track custom voice profile for rename sync
 }
 
