@@ -24,11 +24,31 @@ A local text-to-speech application powered by [Kokoro](https://github.com/hexgra
 git clone https://github.com/cep5603/Sonotext.git
 cd Sonotext
 
-# Run the app (auto-installs dependencies)
+# Run the browser app (auto-installs backend dependencies)
 .\start_app.ps1
 ```
 
 Or double-click `start_app.bat`.
+
+### Tauri Desktop (Windows)
+
+Tauri 2 requires the current Windows prerequisites from the official docs:
+
+- Install Rust with `rustup`
+- Install the Microsoft C++ Build Tools
+- Make sure Microsoft Edge WebView2 is available
+
+Then start the desktop shell:
+
+```powershell
+.\start_tauri.ps1
+```
+
+Or double-click `start_tauri.bat`.
+
+The desktop launcher reuses the local Python backend at `http://127.0.0.1:8000` and opens the frontend inside a native Tauri window instead of a browser tab.
+
+On Windows, the desktop launcher syncs the frontend into `%LOCALAPPDATA%\Sonotext\tauri-dev\frontend` before starting Tauri. This avoids Windows resource compiler failures when the repository path contains characters such as apostrophes.
 
 ### LM Studio Integration
 
