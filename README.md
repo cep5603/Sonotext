@@ -24,11 +24,15 @@ A local text-to-speech application powered by [Kokoro](https://github.com/hexgra
 git clone https://github.com/cep5603/Sonotext.git
 cd Sonotext
 
-# Run the app (auto-installs dependencies)
-.\start_app.ps1
+# Build the portable launcher and install dependencies
+.\install.bat
 ```
 
-Or double-click `start_app.bat`.
+Then run `dist\Sonotext\Sonotext.exe`.
+
+The launcher starts the Python backend in the background, opens the app in a WebView2 window, and adds a tray icon. Closing the window minimizes Sonotext to the tray. Right-click the tray icon to open the window, view logs, restart the backend, or quit.
+
+For development, you can still run `start_app.bat` or `.\start_app.ps1` to start the backend and Vite dev server separately.
 
 ### LM Studio Integration
 

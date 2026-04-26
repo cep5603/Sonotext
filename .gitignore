@@ -1,0 +1,27 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Root distribution output
+dist/
+
+# .NET launcher build artifacts
+launcher/bin/
+launcher/obj/
+
+# WebView2 runtime user data
+*.WebView2/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Logs
+*.log
+logs/

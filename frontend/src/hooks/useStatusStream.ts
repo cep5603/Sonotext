@@ -1,11 +1,12 @@
 import { useEffect } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { apiUrl } from "@/lib/api"
 
 export function useStatusStream() {
     const queryClient = useQueryClient()
 
     useEffect(() => {
-        const eventSource = new EventSource("http://localhost:8000/api/status-stream")
+        const eventSource = new EventSource(apiUrl("/api/status-stream"))
 
         eventSource.addEventListener("status", (event) => {
             try {

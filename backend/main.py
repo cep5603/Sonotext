@@ -1,5 +1,13 @@
 import os
-os.environ["HF_HOME"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hub")
+from pathlib import Path
+from logging.handlers import RotatingFileHandler
+
+BASE_DIR = Path(__file__).resolve().parent
+LOG_DIR = BASE_DIR / "logs"
+LOG_PATH = LOG_DIR / "sonotext.log"
+FRONTEND_DIST = BASE_DIR.parent / "frontend" / "dist"
+
+os.environ["HF_HOME"] = str(BASE_DIR / "hub")
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
@@ -24,9 +32,29 @@ from project_manager import project_manager
 import llm_service
 import alignment_service
 
+def setup_logging():
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+    if not any(isinstance(handler, RotatingFileHandler) and getattr(handler, "baseFilename", None) == str(LOG_PATH) for handler in root_logger.handlers):
+        file_handler = RotatingFileHandler(LOG_PATH, maxBytes=2_000_000, backupCount=3, encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+
+    if not any(isinstance(handler, logging.StreamHandler) for handler in root_logger.handlers):
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        root_logger.addHandler(stream_handler)
+
+setup_logging()
+
 app = FastAPI(title="Sonotext Local API")
 
 WAVEFORM_PEAK_COUNT = 1200
+LOG_STREAM_POLL_INTERVAL = 1.0
+LOG_STREAM_MAX_INITIAL_BYTES = 200_000
 
 # CORS Setup
 app.add_middleware(
@@ -38,7 +66,40 @@ app.add_middleware(
 )
 
 # Mount outputs directory
-app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
+app.mount("/outputs", StaticFiles(directory=str(BASE_DIR / "outputs")), name="outputs")
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+@app.get("/api/logs")
+async def get_logs():
+    async def event_generator():
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        LOG_PATH.touch(exist_ok=True)
+        position = max(0, LOG_PATH.stat().st_size - LOG_STREAM_MAX_INITIAL_BYTES)
+        while True:
+            try:
+                with LOG_PATH.open("r", encoding="utf-8", errors="replace") as log_file:
+                    log_file.seek(position)
+                    chunk = log_file.read()
+                    position = log_file.tell()
+                if chunk:
+                    yield {
+                        "event": "logs",
+                        "data": json.dumps({"chunk": chunk}),
+                    }
+                await asyncio.sleep(LOG_STREAM_POLL_INTERVAL)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                yield {
+                    "event": "logs",
+                    "data": json.dumps({"chunk": f"\n[log stream error] {e}\n"}),
+                }
+                await asyncio.sleep(LOG_STREAM_POLL_INTERVAL)
+
+    return EventSourceResponse(event_generator())
 
 class GenerateRequest(BaseModel):
     text: str
@@ -1085,6 +1146,9 @@ async def show_in_explorer(req: ShowInExplorerRequest):
         logging.error(f"Failed to open explorer: {e}")
         subprocess.run(["explorer", "/select,", abs_path])
     return {"status": "success"}
+
+if FRONTEND_DIST.exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn
