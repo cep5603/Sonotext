@@ -50,6 +50,18 @@ The desktop launcher reuses the local Python backend at `http://127.0.0.1:8000` 
 
 On Windows, the desktop launcher syncs the frontend into `%LOCALAPPDATA%\Sonotext\tauri-dev\frontend` before starting Tauri. This avoids Windows resource compiler failures when the repository path contains characters such as apostrophes.
 
+To build an MSI desktop installer with the Python backend bundled as a Tauri sidecar:
+
+```powershell
+.\build_tauri.ps1
+```
+
+Or double-click `build_tauri.bat`.
+
+The build script packages the FastAPI backend with PyInstaller, copies it to Tauri's sidecar binary folder, syncs the frontend into `%LOCALAPPDATA%\Sonotext\tauri-build\frontend`, and runs the Tauri production build. The packaged backend stores generated audio, history, projects, voice profiles, and model cache under `%LOCALAPPDATA%\Sonotext\backend`.
+
+The backend sidecar is large, so the production package uses MSI instead of NSIS. If MSI packaging fails around `light.exe`, enable the Windows VBSCRIPT optional feature from Windows Features and retry.
+
 ### LM Studio Integration
 
 1. Install [LM Studio](https://lmstudio.ai/).

@@ -7,6 +7,7 @@ Supports CustomVoice, VoiceDesign, and Base models.
 
 import os
 import logging
+import importlib
 import numpy as np
 from dataclasses import dataclass
 from typing import Optional
@@ -120,7 +121,17 @@ class Qwen3TTSManager:
 
         logger.info(f"Loading Qwen3-TTS model: {model_id}")
 
-        from qwen_tts import Qwen3TTSModel
+        try:
+            importlib.import_module("transformers.models.auto.processing_auto")
+            importlib.import_module("transformers.models.auto.feature_extraction_auto")
+            importlib.import_module("transformers.models.qwen2.tokenization_qwen2")
+            importlib.import_module("transformers.models.qwen2.tokenization_qwen2_fast")
+            from transformers import AutoConfig, AutoFeatureExtractor, AutoModel, AutoProcessor
+            from qwen_tts.inference.qwen3_tts_model import Qwen3TTSModel
+        except Exception:
+            logger.exception("Qwen3-TTS dependency import preflight failed")
+            raise
+
         import torch
         import transformers
         transformers.logging.set_verbosity_error()

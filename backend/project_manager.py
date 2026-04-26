@@ -7,8 +7,9 @@ import threading
 import tempfile
 import shutil
 from typing import List, Dict, Optional
+from paths import writable_path
 
-PROJECTS_FILE = os.path.join(os.path.dirname(__file__), "projects.json")
+PROJECTS_FILE = str(writable_path("projects.json"))
 
 logger = logging.getLogger(__name__)
 

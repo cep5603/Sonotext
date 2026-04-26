@@ -8,9 +8,10 @@ import tempfile
 import shutil
 from datetime import datetime
 from typing import List, Dict
+from paths import writable_path
 
-OUTPUTS_DIR = os.path.join(os.path.dirname(__file__), "outputs")
-HISTORY_FILE = os.path.join(os.path.dirname(__file__), "history.json")
+OUTPUTS_DIR = str(writable_path("outputs"))
+HISTORY_FILE = str(writable_path("history.json"))
 
 class HistoryManager:
     def __init__(self):

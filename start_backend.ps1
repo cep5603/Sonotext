@@ -4,13 +4,13 @@ $BackendPort = 8000
 
 function Test-PortOpen {
     param(
-        [string]$Host,
+        [string]$HostName,
         [int]$Port
     )
 
     $client = New-Object System.Net.Sockets.TcpClient
     try {
-        $async = $client.BeginConnect($Host, $Port, $null, $null)
+        $async = $client.BeginConnect($HostName, $Port, $null, $null)
         $connected = $async.AsyncWaitHandle.WaitOne(500)
         if (-not $connected) {
             return $false
@@ -28,14 +28,14 @@ function Test-PortOpen {
 
 function Wait-ForPort {
     param(
-        [string]$Host,
+        [string]$HostName,
         [int]$Port,
         [int]$TimeoutSeconds
     )
 
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
-        if (Test-PortOpen -Host $Host -Port $Port) {
+        if (Test-PortOpen -HostName $HostName -Port $Port) {
             return $true
         }
         Start-Sleep -Milliseconds 500
@@ -44,7 +44,7 @@ function Wait-ForPort {
     return $false
 }
 
-if (Test-PortOpen -Host "127.0.0.1" -Port $BackendPort) {
+if (Test-PortOpen -HostName "127.0.0.1" -Port $BackendPort) {
     Write-Host "Backend server is already running on http://127.0.0.1:$BackendPort" -ForegroundColor DarkGray
     exit 0
 }
@@ -102,7 +102,7 @@ else {
 Write-Host "Starting backend server..." -ForegroundColor Green
 Start-Process -FilePath "$VenvPath\Scripts\python.exe" -ArgumentList "main.py" -WorkingDirectory $BackendPath -NoNewWindow -PassThru | Out-Null
 
-if (Wait-ForPort -Host "127.0.0.1" -Port $BackendPort -TimeoutSeconds 30) {
+if (Wait-ForPort -HostName "127.0.0.1" -Port $BackendPort -TimeoutSeconds 30) {
     Write-Host "Backend API is ready at http://127.0.0.1:$BackendPort" -ForegroundColor Cyan
     exit 0
 }

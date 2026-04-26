@@ -15,6 +15,9 @@ hub/
 
 # Generated outputs
 outputs/
+build/
+dist/
+sonotext-backend.spec
 
 # User-made custom voices
 voice_profiles/

@@ -33,6 +33,13 @@ if ($LASTEXITCODE -ge 8) {
     exit $LASTEXITCODE
 }
 
+$DevSidecarDir = Join-Path $FrontendPath "src-tauri\binaries"
+$DevSidecarPath = Join-Path $DevSidecarDir "sonotext-backend-x86_64-pc-windows-msvc.exe"
+if (-not (Test-Path $DevSidecarPath)) {
+    New-Item -Path $DevSidecarDir -ItemType Directory -Force | Out-Null
+    Copy-Item (Join-Path $env:SystemRoot "System32\cmd.exe") $DevSidecarPath -Force
+}
+
 $installExitCode = 0
 if (-not (Test-Path $TauriCliPath)) {
     Push-Location $FrontendPath

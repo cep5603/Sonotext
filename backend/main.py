@@ -1,5 +1,7 @@
 import os
-os.environ["HF_HOME"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hub")
+from paths import writable_path
+
+os.environ["HF_HOME"] = str(writable_path("hub"))
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
@@ -38,7 +40,7 @@ app.add_middleware(
 )
 
 # Mount outputs directory
-app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
+app.mount("/outputs", StaticFiles(directory=str(writable_path("outputs"))), name="outputs")
 
 class GenerateRequest(BaseModel):
     text: str
@@ -231,7 +233,7 @@ def load_qwen3_model():
         qwen3_manager.load_model("custom-1.7B")
         return qwen3_manager.get_model_info()
     except Exception as e:
-        logging.error(f"Failed to load Qwen3-TTS: {e}")
+        logging.exception("Failed to load Qwen3-TTS")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -876,7 +878,7 @@ async def generate_audio(req: GenerateRequest):
             }
             
         except Exception as e:
-            logging.error(f"Generation failed: {e}")
+            logging.exception("Generation failed")
             yield {
                 "event": "error",
                 "data": json.dumps({"error": str(e)})
@@ -1092,4 +1094,4 @@ if __name__ == "__main__":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     # Note: reload=False to prevent restarts during Qwen3-TTS model loading
     # Restart manually after code changes
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False, loop="main:sonotext_loop_factory")
+    uvicorn.run(app, host="127.0.0.1", port=8000, reload=False, loop="asyncio")

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Optional
 import numpy as np
 import soundfile as sf
+from paths import writable_path
 
 logger = logging.getLogger("VoiceProfileManager")
 
@@ -60,7 +61,7 @@ class VoiceProfileManager:
         """
         if profiles_dir is None:
             # Default to voice_profiles directory next to this file
-            profiles_dir = Path(__file__).parent / "voice_profiles"
+            profiles_dir = writable_path("voice_profiles")
         
         self.profiles_dir = Path(profiles_dir)
         self.profiles_dir.mkdir(parents=True, exist_ok=True)
