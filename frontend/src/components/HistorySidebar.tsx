@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { DotsThreeVerticalIcon, PlayIcon, PauseIcon, TrashIcon, DownloadSimpleIcon, ClockIcon, FolderOpenIcon, PencilSimpleIcon, SpinnerGapIcon, CheckIcon, XIcon, MagicWandIcon, WarningIcon, MagnifyingGlassIcon, FunnelIcon, MicrophoneIcon, PaletteIcon } from "@phosphor-icons/react"
+import { DotsThreeVerticalIcon, PlayIcon, PauseIcon, TrashIcon, DownloadSimpleIcon, ClockIcon, FolderOpenIcon, PencilSimpleIcon, SpinnerGapIcon, CheckIcon, XIcon, MagicWandIcon, WarningIcon, MagnifyingGlassIcon, FunnelIcon, MicrophoneIcon, PaletteIcon, SidebarSimpleIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
+
 import { cn } from "@/lib/utils"
 import { useDraggable } from "@dnd-kit/core"
 import { formatVoiceDisplay } from "@/lib/voiceData"
@@ -22,6 +23,8 @@ interface HistorySidebarProps {
     activeDragId?: string | null
     playingItemId?: string | null
     onPauseItem?: () => void
+    collapsed: boolean
+    onToggleCollapse: () => void
 }
 
 function formatDuration(seconds?: number): string {
@@ -252,7 +255,7 @@ function DraggableHistoryCard({ item, isDragging, children, onClick }: {
     )
 }
 
-export function HistorySidebar({ onSelectItem, activeDragId, playingItemId, onPauseItem }: HistorySidebarProps) {
+export function HistorySidebar({ onSelectItem, activeDragId, playingItemId, onPauseItem, collapsed, onToggleCollapse }: HistorySidebarProps) {
     const queryClient = useQueryClient()
     const [renamingId, setRenamingId] = useState<string | null>(null)
     const [autoRenamingIds, setAutoRenamingIds] = useState<Set<string>>(new Set())
@@ -499,140 +502,158 @@ export function HistorySidebar({ onSelectItem, activeDragId, playingItemId, onPa
     const filterCount = selectedProjectIds.size
 
     return (
-        <div className="w-[26rem] border-l border-border bg-card/50 backdrop-blur-sm h-full flex flex-col shrink-0">
-            <div className="p-4 border-b border-border shrink-0 flex items-center gap-3">
-                <h2 className="font-semibold tracking-tight shrink-0">History</h2>
-                <div className="relative flex-1">
-                    <MagnifyingGlassIcon size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                    <Input
-                        ref={searchInputRef}
-                        type="text"
-                        placeholder="Search..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onFocus={() => setIsSearchFocused(true)}
-                        onBlur={() => setIsSearchFocused(false)}
-                        className="h-8 pl-8 pr-8 text-sm"
-                        aria-label="Search history"
-                    />
-                    {searchQuery ? (
-                        <button
-                            type="button"
-                            onClick={() => setSearchQuery("")}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-accent rounded"
-                            aria-label="Clear search"
-                        >
-                            <XIcon size={16} className="text-muted-foreground" />
-                        </button>
-                    ) : !isSearchFocused && (
-                        <kbd className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none select-none text-[12px] font-medium text-muted-foreground/80 bg-muted/40 border border-border rounded px-1.5 py-0.5 leading-none">/</kbd>
-                    )}
-                </div>
-                {/* Project filter */}
-                <Popover>
-                    <PopoverTrigger asChild>
-                        <button
-                            type="button"
-                            className={cn(
-                                "relative shrink-0 p-1.5 rounded-md transition-colors",
-                                filterCount > 0
-                                    ? "bg-primary/10 text-primary hover:bg-primary/20"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                            )}
-                            aria-label={filterCount > 0 ? `Filter by project (${filterCount} active)` : "Filter by project"}
-                            aria-haspopup="listbox"
-                        >
-                            <FunnelIcon size={20} weight={filterCount > 0 ? "fill" : "regular"} />
-                            {filterCount > 0 && (
-                                <span aria-hidden="true" className="absolute -top-1 -right-1 flex items-center justify-center h-4 min-w-4 px-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-none">
-                                    {filterCount}
-                                </span>
-                            )}
-                        </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="end" className="w-56 p-0">
-                        <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-                            <span id="filter-label" className="text-xs font-medium text-muted-foreground">Filter by Project</span>
-                            {filterCount > 0 && (
+        <div className={cn(
+            "border-l border-border bg-card/50 backdrop-blur-sm h-full flex flex-col shrink-0 transition-[width] duration-300 ease-in-out overflow-hidden",
+            collapsed ? "w-12" : "w-[26rem]"
+        )}>
+            <div className={cn(
+                "p-4 border-b border-border shrink-0 flex items-center gap-3",
+                collapsed && "justify-center"
+            )}>
+                <button
+                    type="button"
+                    onClick={onToggleCollapse}
+                    className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+                    aria-label={collapsed ? "Expand history" : "Collapse history"}
+                >
+                    <SidebarSimpleIcon size={20} className={cn(!collapsed && "rotate-180")} />
+                </button>
+                {!collapsed && (
+                    <>
+                        <h2 className="font-semibold tracking-tight shrink-0">History</h2>
+                        <div className="relative flex-1">
+                            <MagnifyingGlassIcon size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                            <Input
+                                ref={searchInputRef}
+                                type="text"
+                                placeholder="Search..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onFocus={() => setIsSearchFocused(true)}
+                                onBlur={() => setIsSearchFocused(false)}
+                                className="h-8 pl-8 pr-8 text-sm"
+                                aria-label="Search history"
+                            />
+                            {searchQuery ? (
                                 <button
                                     type="button"
-                                    onClick={clearProjectFilter}
-                                    className="text-xs text-primary hover:underline"
+                                    onClick={() => setSearchQuery("")}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-accent rounded"
+                                    aria-label="Clear search"
                                 >
-                                    Clear
+                                    <XIcon size={16} className="text-muted-foreground" />
                                 </button>
+                            ) : !isSearchFocused && (
+                                <kbd className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none select-none text-[12px] font-medium text-muted-foreground/80 bg-muted/40 border border-border rounded px-1.5 py-0.5 leading-none">/</kbd>
                             )}
                         </div>
-                        <div
-                            role="listbox"
-                            aria-labelledby="filter-label"
-                            aria-multiselectable="true"
-                            className="max-h-60 overflow-y-auto py-1"
-                            onKeyDown={(e) => {
-                                const items = Array.from(
-                                    e.currentTarget.querySelectorAll<HTMLElement>('[role="option"]')
-                                )
-                                const idx = items.indexOf(e.target as HTMLElement)
-                                if (idx === -1) return
-
-                                let next = -1
-                                if (e.key === "ArrowDown") {
-                                    next = idx < items.length - 1 ? idx + 1 : 0
-                                } else if (e.key === "ArrowUp") {
-                                    next = idx > 0 ? idx - 1 : items.length - 1
-                                } else if (e.key === "Home") {
-                                    next = 0
-                                } else if (e.key === "End") {
-                                    next = items.length - 1
-                                }
-
-                                if (next !== -1) {
-                                    e.preventDefault()
-                                    items[next].focus()
-                                }
-                            }}
-                        >
-                            {projects.length === 0 ? (
-                                <p className="px-3 py-4 text-xs text-muted-foreground text-center">No projects yet</p>
-                            ) : (
-                                projects.map((project) => {
-                                    const isSelected = selectedProjectIds.has(project.id)
-                                    return (
+                        {/* Project filter */}
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <button
+                                    type="button"
+                                    className={cn(
+                                        "relative shrink-0 p-1.5 rounded-md transition-colors",
+                                        filterCount > 0
+                                            ? "bg-primary/10 text-primary hover:bg-primary/20"
+                                            : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                                    )}
+                                    aria-label={filterCount > 0 ? `Filter by project (${filterCount} active)` : "Filter by project"}
+                                    aria-haspopup="listbox"
+                                >
+                                    <FunnelIcon size={20} weight={filterCount > 0 ? "fill" : "regular"} />
+                                    {filterCount > 0 && (
+                                        <span aria-hidden="true" className="absolute -top-1 -right-1 flex items-center justify-center h-4 min-w-4 px-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-none">
+                                            {filterCount}
+                                        </span>
+                                    )}
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" className="w-56 p-0">
+                                <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+                                    <span id="filter-label" className="text-xs font-medium text-muted-foreground">Filter by Project</span>
+                                    {filterCount > 0 && (
                                         <button
-                                            key={project.id}
                                             type="button"
-                                            role="option"
-                                            aria-selected={isSelected}
-                                            onClick={() => toggleProject(project.id)}
-                                            className={cn(
-                                                "flex items-center gap-2.5 w-full px-3 py-1.5 text-left text-sm transition-colors",
-                                                "hover:bg-accent focus-visible:bg-accent outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                                                isSelected && "bg-accent/50"
-                                            )}
+                                            onClick={clearProjectFilter}
+                                            className="text-xs text-primary hover:underline"
                                         >
-                                            <span
-                                                className="flex-1 truncate font-medium"
-                                                style={{ color: project.color || undefined }}
-                                            >
-                                                {project.name}
-                                            </span>
-                                            {isSelected && (
-                                                <CheckIcon
-                                                    size={14}
-                                                    aria-hidden="true"
-                                                    className="shrink-0"
-                                                    style={{ color: project.color || "hsl(var(--primary))" }}
-                                                />
-                                            )}
+                                            Clear
                                         </button>
-                                    )
-                                })
-                            )}
-                        </div>
-                    </PopoverContent>
-                </Popover>
+                                    )}
+                                </div>
+                                <div
+                                    role="listbox"
+                                    aria-labelledby="filter-label"
+                                    aria-multiselectable="true"
+                                    className="max-h-60 overflow-y-auto py-1"
+                                    onKeyDown={(e) => {
+                                        const items = Array.from(
+                                            e.currentTarget.querySelectorAll<HTMLElement>('[role="option"]')
+                                        )
+                                        const idx = items.indexOf(e.target as HTMLElement)
+                                        if (idx === -1) return
+
+                                        let next = -1
+                                        if (e.key === "ArrowDown") {
+                                            next = idx < items.length - 1 ? idx + 1 : 0
+                                        } else if (e.key === "ArrowUp") {
+                                            next = idx > 0 ? idx - 1 : items.length - 1
+                                        } else if (e.key === "Home") {
+                                            next = 0
+                                        } else if (e.key === "End") {
+                                            next = items.length - 1
+                                        }
+
+                                        if (next !== -1) {
+                                            e.preventDefault()
+                                            items[next].focus()
+                                        }
+                                    }}
+                                >
+                                    {projects.length === 0 ? (
+                                        <p className="px-3 py-4 text-xs text-muted-foreground text-center">No projects yet</p>
+                                    ) : (
+                                        projects.map((project) => {
+                                            const isSelected = selectedProjectIds.has(project.id)
+                                            return (
+                                                <button
+                                                    key={project.id}
+                                                    type="button"
+                                                    role="option"
+                                                    aria-selected={isSelected}
+                                                    onClick={() => toggleProject(project.id)}
+                                                    className={cn(
+                                                        "flex items-center gap-2.5 w-full px-3 py-1.5 text-left text-sm transition-colors",
+                                                        "hover:bg-accent focus-visible:bg-accent outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                                                        isSelected && "bg-accent/50"
+                                                    )}
+                                                >
+                                                    <span
+                                                        className="flex-1 truncate font-medium"
+                                                        style={{ color: project.color || undefined }}
+                                                    >
+                                                        {project.name}
+                                                    </span>
+                                                    {isSelected && (
+                                                        <CheckIcon
+                                                            size={14}
+                                                            aria-hidden="true"
+                                                            className="shrink-0"
+                                                            style={{ color: project.color || "hsl(var(--primary))" }}
+                                                        />
+                                                    )}
+                                                </button>
+                                            )
+                                        })
+                                    )}
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+                    </>
+                )}
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className={cn("flex-1 overflow-y-auto p-4 space-y-4", collapsed && "hidden")}>
                 {filteredHistory.map((item) => {
                     const itemProjects = projectsByGenerationId.get(item.id) || []
                     return (

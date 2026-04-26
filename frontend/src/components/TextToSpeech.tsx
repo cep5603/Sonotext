@@ -114,6 +114,8 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
     const [autoScroll, setAutoScroll] = useState(true)
     const audioPlayerRef = useRef<AudioPlayerHandle>(null)
     const [copied, setCopied] = useState(false)
+    const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(false)
+    const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(false)
     const [cancelConfirmTarget, setCancelConfirmTarget] = useState<"generate" | "clean" | null>(null)
     const cancelConfirmTimeoutRef = useRef<number | null>(null)
     const generateAbortControllerRef = useRef<AbortController | null>(null)
@@ -756,6 +758,8 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                 onVoiceProfileChange={setVoiceProfileId}
                 chunkSize={chunkSize}
                 onChunkSizeChange={setChunkSize}
+                collapsed={isSettingsCollapsed}
+                onToggleCollapse={() => setIsSettingsCollapsed(prev => !prev)}
             />
             <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
                 <div className="flex-1 min-w-0 min-h-0 h-full px-8 py-4">
@@ -1131,7 +1135,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                     </div>
                 </div>
 
-                <HistorySidebar onSelectItem={handleSelectItem} activeDragId={activeDragId} playingItemId={isAudioPlaying ? selectedItem?.id ?? null : null} onPauseItem={() => audioPlayerRef.current?.togglePlay()} />
+                <HistorySidebar onSelectItem={handleSelectItem} activeDragId={activeDragId} playingItemId={isAudioPlaying ? selectedItem?.id ?? null : null} onPauseItem={() => audioPlayerRef.current?.togglePlay()} collapsed={isHistoryCollapsed} onToggleCollapse={() => setIsHistoryCollapsed(prev => !prev)} />
                 <DragOverlay>
                     {activeDragId && (
                         <div className="rounded-lg border border-primary bg-card px-3 py-2 shadow-xl text-sm font-medium opacity-90 max-w-[200px] truncate">

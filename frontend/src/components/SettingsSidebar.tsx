@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { SpinnerGapIcon, PowerIcon, CircleIcon, ArrowsClockwiseIcon, LightningIcon, SparkleIcon, MicrophoneIcon, PaletteIcon, CaretDownIcon, CheckIcon } from "@phosphor-icons/react"
+import { SpinnerGapIcon, PowerIcon, CircleIcon, ArrowsClockwiseIcon, LightningIcon, SparkleIcon, MicrophoneIcon, PaletteIcon, CaretDownIcon, CheckIcon, SidebarSimpleIcon } from "@phosphor-icons/react"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
@@ -25,6 +25,7 @@ import { VoiceManagerDialog } from "./VoiceManagerDialog"
 import { CreateVoiceDialog } from "./CustomVoicesSection"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+
 import type { VoiceProfile } from "@/types"
 
 
@@ -43,6 +44,8 @@ interface SettingsSidebarProps {
     onVoiceProfileChange: (profileId: string | null) => void
     chunkSize: number[]
     onChunkSizeChange: (size: number[]) => void
+    collapsed: boolean
+    onToggleCollapse: () => void
 }
 
 const KOKORO_LANGUAGE_OPTIONS = [
@@ -378,6 +381,8 @@ export function SettingsSidebar({
     onVoiceProfileChange,
     chunkSize,
     onChunkSizeChange,
+    collapsed,
+    onToggleCollapse,
 }: SettingsSidebarProps) {
     const queryClient = useQueryClient()
     const [voiceManagerOpen, setVoiceManagerOpen] = useState(false)
@@ -434,12 +439,26 @@ export function SettingsSidebar({
     }[status] ?? "Unknown"
 
     return (
-        <div className="w-64 border-r border-border bg-card/50 backdrop-blur-sm h-full flex flex-col shrink-0">
-            <div className="p-4 border-b border-border shrink-0">
-                <h2 className="font-semibold tracking-tight">Settings</h2>
+        <div className={cn(
+            "border-r border-border bg-card/50 backdrop-blur-sm h-full flex flex-col shrink-0 transition-[width] duration-300 ease-in-out overflow-hidden",
+            collapsed ? "w-12" : "w-64"
+        )}>
+            <div className={cn(
+                "p-4 border-b border-border shrink-0 flex items-center",
+                collapsed ? "justify-center" : "justify-between"
+            )}>
+                {!collapsed && <h2 className="font-semibold tracking-tight">Settings</h2>}
+                <button
+                    type="button"
+                    onClick={onToggleCollapse}
+                    className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+                    aria-label={collapsed ? "Expand settings" : "Collapse settings"}
+                >
+                    <SidebarSimpleIcon size={20} className={cn(collapsed && "rotate-180")} />
+                </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            <div className={cn("flex-1 overflow-y-auto p-4 space-y-6", collapsed && "hidden")}>
                 {/* Voice Synthesis Settings */}
                 <div className="space-y-4">
                     {/* TTS Engine Selector */}
