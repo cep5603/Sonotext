@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import { CopyIcon, TrashIcon } from "@phosphor-icons/react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { CheckIcon, CopyIcon, TrashIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -20,6 +20,7 @@ export function LogPanel({ open, onOpenChange }: LogPanelProps) {
     const [logs, setLogs] = useState("")
     const [isConnected, setIsConnected] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [copied, setCopied] = useState(false)
     const logRef = useRef<HTMLPreElement | null>(null)
 
     useEffect(() => {
@@ -70,15 +71,17 @@ export function LogPanel({ open, onOpenChange }: LogPanelProps) {
         return error ?? "Disconnected"
     }, [error, isConnected])
 
-    const copyLogs = async () => {
+    const copyLogs = useCallback(async () => {
         if (logs) {
             await navigator.clipboard.writeText(logs)
+            setCopied(true)
+            window.setTimeout(() => setCopied(false), 1500)
         }
-    }
+    }, [logs])
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="flex h-[min(760px,calc(100vh-2rem))] max-w-[min(1000px,calc(100vw-2rem))] flex-col border-border/80 bg-background/95 p-0 shadow-2xl backdrop-blur">
+            <DialogContent className="flex h-[min(760px,calc(100vh-2rem))] max-w-[min(1400px,calc(100vw-2rem))] flex-col border-border/80 bg-background/95 p-0 shadow-2xl backdrop-blur">
                 <DialogHeader className="border-b border-border/70 px-5 py-4">
                     <DialogTitle>Sonotext Logs</DialogTitle>
                     <DialogDescription className="flex items-center gap-2">
@@ -96,12 +99,12 @@ export function LogPanel({ open, onOpenChange }: LogPanelProps) {
 
                 <DialogFooter className="border-t border-border/70 px-5 py-4 sm:justify-between">
                     <Button variant="ghost" onClick={() => setLogs("")}>
-                        <TrashIcon className="mr-2 h-4 w-4" />
+                        <TrashIcon size={16} className="mr-2" />
                         Clear View
                     </Button>
                     <Button variant="secondary" onClick={copyLogs} disabled={!logs}>
-                        <CopyIcon className="mr-2 h-4 w-4" />
-                        Copy Logs
+                        {copied ? <CheckIcon size={16} className="mr-2" /> : <CopyIcon size={16} className="mr-2" />}
+                        {copied ? "Copied!" : "Copy Logs"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

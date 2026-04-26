@@ -53,7 +53,7 @@ internal sealed class SonotextApplicationContext : ApplicationContext
             Visible = true,
             ContextMenuStrip = BuildTrayMenu()
         };
-        trayIcon.DoubleClick += (_, _) => OpenWindow();
+        trayIcon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) OpenWindow(); };
 
         if (!EnsurePortAvailable())
         {
@@ -207,7 +207,12 @@ internal sealed class SonotextApplicationContext : ApplicationContext
         }
 
         mainForm.Show();
-        mainForm.WindowState = FormWindowState.Normal;
+
+        if (mainForm.WindowState == FormWindowState.Minimized)
+        {
+            mainForm.WindowState = FormWindowState.Normal;
+        }
+
         mainForm.Activate();
     }
 
