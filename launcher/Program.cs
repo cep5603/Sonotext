@@ -315,7 +315,7 @@ internal sealed class MainForm : Form
     private readonly string backendUrl;
     private readonly WebView2 webView;
     private readonly Label loadingLabel;
-    private readonly Image? loadingLogo;
+    private readonly Bitmap? loadingLogo;
     private readonly HttpClient httpClient = new() { Timeout = TimeSpan.FromSeconds(2) };
 
     public bool BackendReady { get; private set; }
@@ -349,7 +349,7 @@ internal sealed class MainForm : Form
         Controls.Add(loadingLabel);
     }
 
-    private static Image? LoadLoadingLogo()
+    private static Bitmap? LoadLoadingLogo()
     {
         var logoPath = Path.Combine(AppContext.BaseDirectory, "sonotext-logo.png");
         if (!File.Exists(logoPath))
