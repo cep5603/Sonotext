@@ -2,7 +2,7 @@
 
 A local text-to-speech application powered by [Kokoro](https://github.com/hexgrad/kokoro) and [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS).
 
-![Sonotext](frontend/src/assets/sonotext-logo-full.png)
+![Sonotext Screenshot](frontend/sonotext-app-screenshot-26.4.26.png)
 
 ## Features
 
