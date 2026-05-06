@@ -425,6 +425,11 @@ internal sealed class MainForm : Form
         if (webView.CoreWebView2 is null)
         {
             await webView.EnsureCoreWebView2Async();
+            var core = webView.CoreWebView2!;
+            core.DocumentTitleChanged += (_, _) =>
+            {
+                Text = core.DocumentTitle;
+            };
         }
 
         webView.Source = new Uri(backendUrl);
