@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react"
 import { useQuery, useIsMutating } from "@tanstack/react-query"
 import axios from "axios"
-import { LightningIcon, SparkleIcon, MicrophoneIcon, PaletteIcon, CaretDownIcon, CheckIcon, SidebarSimpleIcon, HardDrivesIcon, SpinnerGapIcon } from "@phosphor-icons/react"
+import { LightningIcon, SparkleIcon, MicrophoneIcon, PaletteIcon, CaretDownIcon, CheckIcon, SidebarSimpleIcon, HardDrivesIcon, SpinnerGapIcon, FileTextIcon } from "@phosphor-icons/react"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
@@ -278,27 +278,37 @@ function ModelManagerFooter({ collapsed, onOpen }: { collapsed: boolean; onOpen:
     const anyLoading = isMutating > 0 || models.some((m) => m.loading)
 
     return (
-        <div className={cn("border-t border-border px-3 py-2.5 shrink-0", collapsed && "hidden")}>
+        <div className={cn("border-t border-border px-3 py-2.5 shrink-0 space-y-1", collapsed && "hidden")}>
+            <div>
+                <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-2 px-2 text-sm text-muted-foreground hover:text-foreground"
+                    onClick={onOpen}
+                >
+                    <HardDrivesIcon size={20} />
+                    Model Manager
+                </Button>
+                <p className="text-xs text-muted-foreground/70 pl-2 mt-0.5 flex items-center gap-1.5">
+                    {anyLoading ? (
+                        <>
+                            <SpinnerGapIcon size={10} className="animate-spin" />
+                            <span>Loading model…</span>
+                        </>
+                    ) : models.length > 0 ? (
+                        <span>{loadedCount} model{loadedCount !== 1 ? "s" : ""} loaded</span>
+                    ) : (
+                        <span>&nbsp;</span>
+                    )}
+                </p>
+            </div>
             <Button
                 variant="ghost"
-                className="w-full justify-start gap-2 text-sm text-muted-foreground hover:text-foreground"
-                onClick={onOpen}
+                className="w-full justify-start gap-2 px-2 text-sm text-muted-foreground hover:text-foreground"
+                onClick={() => window.dispatchEvent(new Event('sonotext-open-logs'))}
             >
-                <HardDrivesIcon size={18} />
-                Model Manager
+                <FileTextIcon size={20} />
+                View Logs
             </Button>
-            <p className="text-xs text-muted-foreground/70 pl-2 mt-0.5 flex items-center gap-1.5">
-                {anyLoading ? (
-                    <>
-                        <SpinnerGapIcon size={10} className="animate-spin" />
-                        <span>Loading model…</span>
-                    </>
-                ) : models.length > 0 ? (
-                    <span>{loadedCount} model{loadedCount !== 1 ? "s" : ""} loaded</span>
-                ) : (
-                    <span>&nbsp;</span>
-                )}
-            </p>
         </div>
     )
 }
