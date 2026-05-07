@@ -82,6 +82,24 @@ class ModelManager:
             self.pipelines[lang_code] = KPipeline(lang_code=lang_code)
         return self.pipelines[lang_code]
 
+    def get_loaded_pipelines(self) -> dict[str, bool]:
+        """Return a dict of lang_code -> True for all loaded pipelines."""
+        return {code: True for code in self.pipelines}
+
+    def unload_pipeline(self, lang_code: str) -> bool:
+        """Unload a specific language pipeline to free memory."""
+        if lang_code not in self.pipelines:
+            return False
+        del self.pipelines[lang_code]
+        logger.info(f"Unloaded Kokoro pipeline for lang_code: {lang_code}")
+        return True
+
+    def unload_all_pipelines(self) -> None:
+        """Unload all language pipelines."""
+        count = len(self.pipelines)
+        self.pipelines.clear()
+        logger.info(f"Unloaded all {count} Kokoro pipelines.")
+
     def generate_audio(self, text: str, voice: str, speed: float = 1.0, lang_override: str | None = None):
         if voice not in self.voices:
             logger.warning(f"Voice {voice} not found. Using default 'af_heart'.")

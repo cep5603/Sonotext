@@ -56,6 +56,16 @@ def _ensure_model_loaded():
     logger.info("Alignment model loaded successfully")
 
 
+def is_loaded() -> bool:
+    """Check if the alignment model is currently loaded in memory."""
+    return _alignment_model is not None
+
+
+def load_model():
+    """Explicitly load the alignment model into memory."""
+    _ensure_model_loaded()
+
+
 def unload_model():
     """Unload the alignment model to free VRAM."""
     global _alignment_model, _alignment_tokenizer

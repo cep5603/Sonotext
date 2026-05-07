@@ -35,6 +35,13 @@ export function useStatusStream() {
                     })
                 }
 
+                // Update centralized model registry
+                if (data.model_registry) {
+                    queryClient.setQueryData(["model-registry"], {
+                        models: data.model_registry
+                    })
+                }
+
             } catch (err) {
                 console.error("Failed to parse status stream event", err)
             }

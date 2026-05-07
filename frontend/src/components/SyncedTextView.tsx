@@ -40,7 +40,7 @@ function findCurrentWordIndex(words: WordTiming[], time: number): number {
     return result
 }
 
-// Memoized word span — only re-renders when isActive or the word itself changes
+// Memoized word span: only re-renders when isActive or the word itself changes
 interface WordSpanProps {
     word: WordTiming
     separator: string
@@ -91,7 +91,7 @@ export function SyncedTextView({
     const scrollThrottleRef = useRef(false)
     const scrollThrottleTimeoutRef = useRef<number | null>(null)
 
-    // Word index state — only updated when the active word actually changes
+    // Word index state: only updated when the active word actually changes
     const [currentWordIndex, setCurrentWordIndex] = useState(-1)
     const rafIdRef = useRef<number | null>(null)
     const lastWordIndexRef = useRef(-1)

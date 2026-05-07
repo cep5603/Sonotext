@@ -430,6 +430,16 @@ internal sealed class MainForm : Form
             {
                 Text = core.DocumentTitle;
             };
+
+            // Clear disk cache on every launch so frontend rebuilds are picked up
+            try
+            {
+                await core.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.DiskCache);
+            }
+            catch
+            {
+                // Ignore cache-clear errors; proceed to navigate anyway
+            }
         }
 
         webView.Source = new Uri(backendUrl);

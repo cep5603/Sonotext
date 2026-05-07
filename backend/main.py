@@ -303,6 +303,187 @@ def unload_qwen3_model():
     return {"status": "success"}
 
 
+# Centralized Model Registry
+
+KOKORO_LANG_LABELS = {
+    'a': 'American English',
+    'b': 'British English',
+    'j': 'Japanese',
+    'z': 'Mandarin Chinese',
+    'e': 'Spanish',
+    'f': 'French',
+    'h': 'Hindi',
+    'i': 'Italian',
+    'p': 'Portuguese',
+}
+
+
+def _build_model_registry() -> list[dict]:
+    """Aggregate the state of every model subsystem into a flat list."""
+    models = []
+
+    # Kokoro pipelines (one per loaded language)
+    loaded_pipelines = model_manager.get_loaded_pipelines()
+    for code, label in KOKORO_LANG_LABELS.items():
+        models.append({
+            "id": f"kokoro:{code}",
+            "name": f"Kokoro — {label}",
+            "category": "tts",
+            "loaded": code in loaded_pipelines,
+            "size_label": "82M params",
+            "can_unload": code in loaded_pipelines,
+            "can_load": code not in loaded_pipelines,
+        })
+
+    # Qwen3-TTS
+    qwen3_info = qwen3_manager.get_model_info()
+    qwen3_loaded = qwen3_info.get("loaded", False)
+    qwen3_loading = qwen3_info.get("is_loading", False)
+    qwen3_model_key = qwen3_info.get("model_key")
+    from qwen_tts_manager import QWEN3_MODELS
+    for key, hf_id in QWEN3_MODELS.items():
+        is_this_loaded = qwen3_loaded and qwen3_model_key == key
+        short_name = hf_id.split("/")[-1]
+        detail = None
+        if is_this_loaded and qwen3_info.get("flash_attention") is not None:
+            detail = f"FlashAttention: {'✓' if qwen3_info['flash_attention'] else '✗'}"
+        models.append({
+            "id": f"qwen3:{key}",
+            "name": short_name,
+            "category": "tts",
+            "loaded": is_this_loaded,
+            "loading": qwen3_loading and (qwen3_model_key == key or qwen3_model_key is None),
+            "size_label": "1.7B params",
+            "detail": detail,
+            "can_unload": is_this_loaded,
+            "can_load": not is_this_loaded,
+        })
+
+    # CTC Forced Aligner
+    alignment_loaded = alignment_service.is_loaded()
+    models.append({
+        "id": "alignment",
+        "name": "CTC Forced Aligner",
+        "category": "alignment",
+        "loaded": alignment_loaded,
+        "size_label": "300M params",
+        "can_unload": alignment_loaded,
+        "can_load": not alignment_loaded,
+    })
+
+    # LM Studio LLMs
+    lm_available = llm_service.check_llm_available()
+    if lm_available:
+        lm_models = llm_service.get_available_models()
+        for m in lm_models:
+            mid = m["id"]
+            state = m.get("state", "not-loaded")
+            size_bytes = m.get("size_bytes", 0)
+            if size_bytes > 0:
+                size_label = f"{size_bytes / (1024**3):.2f} GB"
+            else:
+                size_label = m.get("quantization", "")
+            models.append({
+                "id": f"lmstudio:{mid}",
+                "name": mid.split("/")[-1] if "/" in mid else mid,
+                "category": "llm",
+                "loaded": state == "loaded",
+                "loading": state == "loading",
+                "size_label": size_label,
+                "can_unload": state == "loaded",
+                "can_load": state != "loaded",
+            })
+    else:
+        models.append({
+            "id": "lmstudio:offline",
+            "name": "LM Studio",
+            "category": "llm",
+            "loaded": False,
+            "size_label": "Offline",
+            "detail": "LM Studio is not running",
+            "can_unload": False,
+            "can_load": False,
+            "offline": True,
+        })
+
+    return models
+
+
+@app.get("/api/models")
+def get_all_models():
+    """Return a unified list of all models and their states."""
+    return {"models": _build_model_registry()}
+
+
+@app.post("/api/models/{model_id:path}/load")
+def load_model_by_id(model_id: str):
+    """Load a model by its registry ID."""
+    try:
+        if model_id.startswith("kokoro:"):
+            lang_code = model_id.split(":", 1)[1]
+            # Force-create the pipeline by generating with it
+            model_manager._get_pipeline(lang_code)
+            return {"status": "success"}
+
+        if model_id.startswith("qwen3:"):
+            model_key = model_id.split(":", 1)[1]
+            qwen3_manager.load_model(model_key)
+            return {"status": "success"}
+
+        if model_id == "alignment":
+            alignment_service.load_model()
+            return {"status": "success"}
+
+        if model_id.startswith("lmstudio:"):
+            lm_id = model_id.split(":", 1)[1]
+            import subprocess
+            result = subprocess.run(
+                ["lms", "load", lm_id],
+                capture_output=True, text=True, timeout=120,
+            )
+            if result.returncode == 0:
+                return {"status": "success"}
+            raise RuntimeError(result.stderr or "lms load failed")
+
+        raise HTTPException(status_code=404, detail=f"Unknown model: {model_id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Failed to load model {model_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/models/{model_id:path}/unload")
+def unload_model_by_id(model_id: str):
+    """Unload a model by its registry ID."""
+    try:
+        if model_id.startswith("kokoro:"):
+            lang_code = model_id.split(":", 1)[1]
+            if not model_manager.unload_pipeline(lang_code):
+                raise HTTPException(status_code=404, detail=f"Pipeline {lang_code} not loaded")
+            return {"status": "success"}
+
+        if model_id.startswith("qwen3:"):
+            qwen3_manager.unload_model()
+            return {"status": "success"}
+
+        if model_id == "alignment":
+            alignment_service.unload_model()
+            return {"status": "success"}
+
+        if model_id.startswith("lmstudio:"):
+            lm_id = model_id.split(":", 1)[1]
+            success = llm_service.unload_model(lm_id)
+            return {"status": "success" if success else "failed"}
+
+        raise HTTPException(status_code=404, detail=f"Unknown model: {model_id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Failed to unload model {model_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Voice Profile API Endpoints
 
 @app.get("/api/voice-profiles")
@@ -611,7 +792,7 @@ def unload_llm_model():
 
 @app.get("/api/status-stream")
 async def get_status_stream():
-    """Stream application status (LLMs, TTS models) via Server-Sent Events."""
+    """Stream application status (LLMs, TTS models, model registry) via Server-Sent Events."""
     async def event_generator():
         while True:
             try:
@@ -625,12 +806,16 @@ async def get_status_stream():
                     # Qwen3 Status
                     qwen3_info = qwen3_manager.get_model_info()
 
+                    # Full model registry
+                    model_registry = _build_model_registry()
+
                     return {
                         "llm_available": llm_available,
                         "current_llm": current_llm,
                         "llm_status": llm_status,
                         "llm_models": llm_models,
-                        "qwen3_info": qwen3_info
+                        "qwen3_info": qwen3_info,
+                        "model_registry": model_registry,
                     }
 
                 status_data = await asyncio.to_thread(_get_status)
@@ -867,6 +1052,9 @@ async def generate_audio(req: GenerateRequest):
                         req.lang or "auto",
                     )
                 elif req.engine == "qwen3":
+                    # Auto-load CustomVoice model if not already loaded
+                    if not qwen3_manager.is_loaded or qwen3_manager.model_type != "custom":
+                        await asyncio.to_thread(qwen3_manager.load_model, "custom-1.7B")
                     samples, sr = await asyncio.to_thread(
                         qwen3_manager.generate_audio,
                         chunk,

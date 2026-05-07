@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useQuery, useIsMutating } from "@tanstack/react-query"
 import axios from "axios"
-import { SpinnerGapIcon, PowerIcon, CircleIcon, ArrowsClockwiseIcon, LightningIcon, SparkleIcon, MicrophoneIcon, PaletteIcon, CaretDownIcon, CheckIcon, SidebarSimpleIcon } from "@phosphor-icons/react"
+import { LightningIcon, SparkleIcon, MicrophoneIcon, PaletteIcon, CaretDownIcon, CheckIcon, SidebarSimpleIcon, HardDrivesIcon, SpinnerGapIcon } from "@phosphor-icons/react"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,7 @@ import { VoiceSelector } from "./VoiceSelector"
 import { LLMModelSelector } from "./LLMModelSelector"
 import { VoiceManagerDialog } from "./VoiceManagerDialog"
 import { CreateVoiceDialog } from "./CustomVoicesSection"
+import { ModelManagerDialog } from "./ModelManagerDialog"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
@@ -73,111 +74,7 @@ const QWEN3_LANGUAGE_OPTIONS = [
     { value: "russian", label: "Russian" },
 ]
 
-// Qwen3-TTS Model Status Component
-function Qwen3ModelStatus() {
-    const queryClient = useQueryClient()
 
-    const { data: modelInfo, isLoading } = useQuery({
-        queryKey: ["qwen3-info"],
-        queryFn: async () => {
-            const res = await axios.get("http://localhost:8000/api/qwen3/info")
-            return res.data as {
-                loaded: boolean
-                model_id: string | null
-                flash_attention: boolean | null
-            }
-        },
-        refetchInterval: false,
-        staleTime: Infinity,
-        retry: false,
-    })
-
-    const loadMutation = useMutation({
-        mutationFn: async () => {
-            await axios.post("http://localhost:8000/api/qwen3/load", {})
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["qwen3-info"] })
-        },
-    })
-
-    const unloadMutation = useMutation({
-        mutationFn: async () => {
-            await axios.post("http://localhost:8000/api/qwen3/unload")
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["qwen3-info"] })
-        },
-    })
-
-    const isModelLoaded = modelInfo?.loaded ?? false
-
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center p-2">
-                <SpinnerGapIcon size={16} className="animate-spin text-muted-foreground" />
-            </div>
-        )
-    }
-
-    return (
-        <div className="p-3 rounded-lg border border-border bg-muted/30 space-y-2">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                    <CircleIcon className={cn(
-                        "h-2.5 w-2.5 fill-current",
-                        isModelLoaded ? "text-green-500" : "text-muted-foreground"
-                    )} />
-                    <span className={isModelLoaded ? "text-foreground" : "text-muted-foreground"}>
-                        {isModelLoaded
-                            ? `Model Loaded`
-                            : "Model Not Loaded"}
-                    </span>
-                </div>
-                {isModelLoaded && (
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-xs"
-                        onClick={() => unloadMutation.mutate()}
-                        disabled={unloadMutation.isPending}
-                    >
-                        {unloadMutation.isPending ? (
-                            <SpinnerGapIcon size={16} className="animate-spin" />
-                        ) : (
-                            <>
-                                <PowerIcon size={16} className="mr-1" />
-                                Unload
-                            </>
-                        )}
-                    </Button>
-                )}
-            </div>
-            {!isModelLoaded && (
-                <Button
-                    size="sm"
-                    className="w-full h-7 text-xs"
-                    onClick={() => loadMutation.mutate()}
-                    disabled={loadMutation.isPending}
-                >
-                    {loadMutation.isPending ? (
-                        <>
-                            <SpinnerGapIcon size={16} className="animate-spin mr-1" />
-                            Loading...
-                        </>
-                    ) : (
-                        "Load Model"
-                    )}
-                </Button>
-            )}
-            {!modelInfo?.flash_attention && isModelLoaded && (
-                <p className="text-xs text-amber-500">
-                    ⚠ FlashAttention not available
-                </p>
-            )}
-        </div>
-    )
-}
 
 // Built-in Qwen3 speakers with language flag
 const QWEN3_SPEAKERS = [
@@ -366,6 +263,47 @@ function Qwen3VoiceSelector({
 }
 
 
+// Model Manager footer with live status
+function ModelManagerFooter({ collapsed, onOpen }: { collapsed: boolean; onOpen: () => void }) {
+    const { data } = useQuery<{ models: { loaded: boolean; loading?: boolean }[] }>({
+        queryKey: ["model-registry"],
+        staleTime: Infinity,
+        enabled: false, // populated by SSE stream only
+    })
+
+    const isMutating = useIsMutating({ mutationKey: ["model-action"] })
+
+    const models = data?.models ?? []
+    const loadedCount = models.filter((m) => m.loaded).length
+    const anyLoading = isMutating > 0 || models.some((m) => m.loading)
+
+    return (
+        <div className={cn("border-t border-border px-3 py-2.5 shrink-0", collapsed && "hidden")}>
+            <Button
+                variant="ghost"
+                className="w-full justify-start gap-2 text-sm text-muted-foreground hover:text-foreground"
+                onClick={onOpen}
+            >
+                <HardDrivesIcon size={18} />
+                Model Manager
+            </Button>
+            <p className="text-xs text-muted-foreground/70 pl-2 mt-0.5 flex items-center gap-1.5">
+                {anyLoading ? (
+                    <>
+                        <SpinnerGapIcon size={10} className="animate-spin" />
+                        <span>Loading model…</span>
+                    </>
+                ) : models.length > 0 ? (
+                    <span>{loadedCount} model{loadedCount !== 1 ? "s" : ""} loaded</span>
+                ) : (
+                    <span>&nbsp;</span>
+                )}
+            </p>
+        </div>
+    )
+}
+
+
 export function SettingsSidebar({
     voice,
     onVoiceChange,
@@ -384,9 +322,9 @@ export function SettingsSidebar({
     collapsed,
     onToggleCollapse,
 }: SettingsSidebarProps) {
-    const queryClient = useQueryClient()
     const [voiceManagerOpen, setVoiceManagerOpen] = useState(false)
     const [createVoiceOpen, setCreateVoiceOpen] = useState(false)
+    const [modelManagerOpen, setModelManagerOpen] = useState(false)
 
     const handleSpeedWheel = useCallback((e: React.WheelEvent) => {
         e.preventDefault()
@@ -402,41 +340,7 @@ export function SettingsSidebar({
         onChunkSizeChange([Math.max(100, Math.min(2000, next))])
     }, [chunkSize, onChunkSizeChange])
 
-    // LLM status
-    const { data: modelStatus } = useQuery({
-        queryKey: ["llm-model-status"],
-        queryFn: async () => {
-            const res = await axios.get("http://localhost:8000/api/llm-model-status")
-            return res.data as { model: string; status: string }
-        },
-        refetchInterval: false,
-        staleTime: Infinity,
-        retry: false,
-    })
 
-    const unloadMutation = useMutation({
-        mutationFn: async () => {
-            await axios.post("http://localhost:8000/api/llm-unload")
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["llm-model-status"] })
-            queryClient.invalidateQueries({ queryKey: ["llm-models"] })
-        },
-    })
-
-    const status = modelStatus?.status ?? "not-loaded"
-
-    const statusColor = {
-        "loaded": "text-green-500",
-        "loading": "text-yellow-500",
-        "not-loaded": "text-muted-foreground",
-    }[status] ?? "text-muted-foreground"
-
-    const statusLabel = {
-        "loaded": "Loaded",
-        "loading": "Loading...",
-        "not-loaded": "Not Loaded",
-    }[status] ?? "Unknown"
 
     return (
         <div className={cn(
@@ -499,9 +403,6 @@ export function SettingsSidebar({
                     {/* Qwen3-TTS specific settings */}
                     {engine === "qwen3" && (
                         <>
-                            {/* Model Status & Load Button */}
-                            <Qwen3ModelStatus />
-
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                     <Label>Voice</Label>
@@ -556,6 +457,7 @@ export function SettingsSidebar({
                         </Select>
                     </div>
 
+
                     {engine === "kokoro" && (
                         <div className="space-y-2">
                             <div className="flex justify-between">
@@ -597,56 +499,17 @@ export function SettingsSidebar({
                 {/* Text Processing Settings */}
                 <div className="space-y-4">
                     <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                            <Label>Text Model</Label>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={() => {
-                                    queryClient.invalidateQueries({ queryKey: ["llm-status"] })
-                                    queryClient.invalidateQueries({ queryKey: ["llm-models"] })
-                                    queryClient.invalidateQueries({ queryKey: ["llm-model-status"] })
-                                }}
-                                title="Refresh LLM status"
-                            >
-                                <ArrowsClockwiseIcon size={16} className="text-muted-foreground" />
-                            </Button>
-                        </div>
+                        <Label>Text Model</Label>
                         <LLMModelSelector />
-                    </div>
-
-                    {/* Model Status Indicator */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-sm">
-                            {status === "loading" ? (
-                                <SpinnerGapIcon className={cn("animate-spin", statusColor)} />
-                            ) : (
-                                <CircleIcon className={cn("fill-current", statusColor)} />
-                            )}
-                            <span className={statusColor}>{statusLabel}</span>
-                        </div>
-                        {status === "loaded" && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs"
-                                onClick={() => unloadMutation.mutate()}
-                                disabled={unloadMutation.isPending}
-                            >
-                                {unloadMutation.isPending ? (
-                                    <SpinnerGapIcon size={16} className="animate-spin" />
-                                ) : (
-                                    <>
-                                        <PowerIcon size={16} className="mr-1" />
-                                        Unload
-                                    </>
-                                )}
-                            </Button>
-                        )}
                     </div>
                 </div>
             </div>
+
+            {/* Model Manager Button */}
+            <ModelManagerFooter
+                collapsed={collapsed}
+                onOpen={() => setModelManagerOpen(true)}
+            />
 
             {/* Voice Manager Dialog */}
             <VoiceManagerDialog
@@ -661,6 +524,12 @@ export function SettingsSidebar({
             <CreateVoiceDialog
                 open={createVoiceOpen}
                 onOpenChange={setCreateVoiceOpen}
+            />
+
+            {/* Model Manager Dialog */}
+            <ModelManagerDialog
+                open={modelManagerOpen}
+                onOpenChange={setModelManagerOpen}
             />
         </div>
     )

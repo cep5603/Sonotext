@@ -44,6 +44,11 @@ dotnet build "launcher\Sonotext.Launcher.csproj" -c Release
 if errorlevel 1 goto :fail
 if not exist "%DIST%" mkdir "%DIST%"
 xcopy /E /I /Y "launcher\bin\Release\net8.0-windows\*" "%DIST%\" >nul
+
+:: Clear WebView2 cache so the rebuilt frontend is picked up on next launch
+if exist "%DIST%\Sonotext.exe.WebView2" (
+    rmdir /S /Q "%DIST%\Sonotext.exe.WebView2" >nul 2>&1
+)
 if errorlevel 1 goto :fail
 
 echo.

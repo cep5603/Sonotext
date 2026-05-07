@@ -64,6 +64,7 @@ class Qwen3TTSManager:
         self.speakers: list[str] = []
         self.languages: list[str] = []
         self._flash_attn_available: bool | None = None
+        self._is_loading: bool = False
         logger.info("Qwen3TTSManager initialized (model not loaded yet).")
 
     @property
@@ -118,6 +119,7 @@ class Qwen3TTSManager:
         if self.model is not None:
             self.unload_model()
 
+        self._is_loading = True
         logger.info(f"Loading Qwen3-TTS model: {model_id}")
 
         from qwen_tts import Qwen3TTSModel
@@ -150,6 +152,7 @@ class Qwen3TTSManager:
             logger.info(f"Speakers: {self.speakers}")
         if self.languages:
             logger.info(f"Languages: {self.languages}")
+        self._is_loading = False
 
     def unload_model(self) -> None:
         """Unload the current model to free VRAM."""
@@ -215,6 +218,7 @@ class Qwen3TTSManager:
         """Get info about the currently loaded model."""
         return {
             "loaded": self.is_loaded,
+            "is_loading": self._is_loading,
             "model_id": self.model_id,
             "model_key": self.model_key,
             "model_type": self.model_type,
