@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
+using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -11,11 +12,45 @@ namespace Sonotext.Launcher;
 
 internal static class Program
 {
+    private static Mutex? singleInstanceMutex;
+    private static EventWaitHandle? singleInstanceEvent;
+
     [STAThread]
     private static void Main()
     {
+        singleInstanceMutex = new Mutex(true, "SonotextLauncherMutex", out bool isFirstInstance);
+
+        if (!isFirstInstance)
+        {
+            try
+            {
+                var evt = EventWaitHandle.OpenExisting("SonotextLauncherEvent");
+                evt.Set();
+            }
+            catch
+            {
+                // Ignore if unable to signal
+            }
+            return;
+        }
+
+        singleInstanceEvent = new EventWaitHandle(false, EventResetMode.AutoReset, "SonotextLauncherEvent");
+
         ApplicationConfiguration.Initialize();
         using var context = new SonotextApplicationContext();
+
+        var thread = new Thread(() =>
+        {
+            while (singleInstanceEvent.WaitOne())
+            {
+                context.OpenWindowFromOtherThread();
+            }
+        })
+        {
+            IsBackground = true
+        };
+        thread.Start();
+
         Application.Run(context);
     }
 }
@@ -214,6 +249,23 @@ internal sealed class SonotextApplicationContext : ApplicationContext
         }
 
         mainForm.Activate();
+    }
+
+    public void OpenWindowFromOtherThread()
+    {
+        if (mainForm.IsDisposed)
+        {
+            return;
+        }
+
+        if (mainForm.InvokeRequired)
+        {
+            mainForm.Invoke(new Action(OpenWindow));
+        }
+        else
+        {
+            OpenWindow();
+        }
     }
 
     private void ViewLogs()
