@@ -23,6 +23,12 @@ import numpy as np
 import logging
 import uuid
 import asyncio
+from language_utils import (
+    KOKORO_LANG_LABELS,
+    get_alignment_language_code_from_voice,
+    map_language_to_whisper_language,
+    normalize_language_code,
+)
 from model_manager import model_manager
 from qwen_tts_manager import qwen3_manager
 from voice_profiles import voice_profile_manager, DEFAULT_REFERENCE_TEXT
@@ -301,21 +307,6 @@ def unload_qwen3_model():
     """Unload the Qwen3-TTS model to free VRAM."""
     qwen3_manager.unload_model()
     return {"status": "success"}
-
-
-# Centralized Model Registry
-
-KOKORO_LANG_LABELS = {
-    'a': 'American English',
-    'b': 'British English',
-    'j': 'Japanese',
-    'z': 'Mandarin Chinese',
-    'e': 'Spanish',
-    'f': 'French',
-    'h': 'Hindi',
-    'i': 'Italian',
-    'p': 'Portuguese',
-}
 
 
 def _build_model_registry() -> list[dict]:
@@ -661,20 +652,7 @@ async def transcribe_audio(
             
             model = WhisperModel("small", device=device, compute_type=compute_type)
             
-            # Map language codes
-            lang_map = {
-                "eng": "en",
-                "cmn": "zh", 
-                "jpn": "ja",
-                "kor": "ko",
-                "fra": "fr",
-                "deu": "de",
-                "spa": "es",
-                "por": "pt",
-                "rus": "ru",
-                "ita": "it",
-            }
-            whisper_lang = lang_map.get(language, "en")
+            whisper_lang = map_language_to_whisper_language(language)
             
             # Transcribe
             segments, info = model.transcribe(tmp_path, language=whisper_lang)
@@ -924,15 +902,20 @@ async def get_alignment(entry_id: str):
     
     # Generate alignment on-demand
     try:
-        # Get language code from voice
-        language = alignment_service.get_language_code(entry.get("voice", "af_heart"))
+        if entry.get("engine") == "kokoro":
+            language = get_alignment_language_code_from_voice(entry.get("voice", "af_heart"))
+        else:
+            language = normalize_language_code(entry.get("lang"))
         
         # Run alignment in thread pool to avoid blocking
         alignment = await asyncio.to_thread(
             alignment_service.align_audio_to_text,
             audio_path,
             entry["text"],
-            language
+            language,
+            16,
+            entry.get("chunk_size"),
+            entry.get("duration"),
         )
         
         # Cache the alignment

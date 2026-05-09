@@ -1,22 +1,11 @@
 import os
 import logging
 import numpy as np
+from language_utils import resolve_kokoro_language_code
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("KokoroManager")
-
-# Language code mapping from voice prefix
-LANG_CODE_MAP = {
-    'a': 'a',  # American English
-    'b': 'b',  # British English
-    'j': 'j',  # Japanese
-    'z': 'z',  # Mandarin Chinese
-    'e': 'e',  # Spanish
-    'f': 'f',  # French
-    'h': 'h',  # Hindi
-    'i': 'i',  # Italian
-    'p': 'p',  # Portuguese
-}
 
 # Full voice list by language
 VOICES = {
@@ -66,13 +55,6 @@ class ModelManager:
             self.voices.extend(lang_voices)
         logger.info(f"Loaded {len(self.voices)} voices")
 
-    def _get_lang_code(self, voice: str) -> str:
-        """Get language code from voice prefix."""
-        if not voice:
-            return 'a'
-        prefix = voice[0]
-        return LANG_CODE_MAP.get(prefix, 'a')
-
     def _get_pipeline(self, lang_code: str):
         """Get or create a pipeline for the given language code."""
         if lang_code not in self.pipelines:
@@ -105,16 +87,7 @@ class ModelManager:
             logger.warning(f"Voice {voice} not found. Using default 'af_heart'.")
             voice = "af_heart"
 
-        # Determine language code
-        if lang_override:
-            # Map espeak codes to kokoro lang codes
-            espeak_to_kokoro = {
-                'en-us': 'a', 'en-gb': 'b', 'es': 'e', 
-                'fr-fr': 'f', 'hi': 'h', 'it': 'i', 'pt-br': 'p'
-            }
-            lang_code = espeak_to_kokoro.get(lang_override, self._get_lang_code(voice))
-        else:
-            lang_code = self._get_lang_code(voice)
+        lang_code = resolve_kokoro_language_code(voice, lang_override)
 
         pipeline = self._get_pipeline(lang_code)
         
