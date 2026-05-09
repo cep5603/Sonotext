@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react"
 import WaveSurfer from "wavesurfer.js"
-import { PlayIcon, PauseIcon, DownloadSimpleIcon } from "@phosphor-icons/react"
+import { PlayIcon, PauseIcon, DownloadSimpleIcon, ArrowCounterClockwiseIcon, ArrowClockwiseIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
@@ -31,6 +31,23 @@ const SPEED_MAX = 2.0
 const SPEED_STEP = 0.25
 
 const DEFAULT_ACCENT = 'rgb(101, 165, 255)'
+
+interface SeekIconProps {
+    direction: 'backward' | 'forward'
+}
+
+function SeekIcon({ direction }: SeekIconProps) {
+    const Icon = direction === 'backward' ? ArrowCounterClockwiseIcon : ArrowClockwiseIcon
+
+    return (
+        <span aria-hidden="true" className="relative flex h-8 w-8 items-center justify-center">
+            <Icon size={24} />
+            <span className="pointer-events-none absolute inline-flex translate-y-[1px] items-center justify-center rounded-full bg-background px-[1px] text-[9px] font-semibold leading-none">
+                10
+            </span>
+        </span>
+    )
+}
 
 export interface AudioPlayerHandle {
     togglePlay: () => void
@@ -273,6 +290,18 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
         setPlaybackRate(clamped)
     }, [])
 
+    const seekBySeconds = useCallback((offsetSeconds: number) => {
+        const ws = wavesurferRef.current
+        if (!ws || !isReady) return
+
+        const audioDuration = ws.getDuration()
+        if (!audioDuration) return
+
+        const nextTime = Math.min(Math.max(ws.getCurrentTime() + offsetSeconds, 0), audioDuration)
+        ws.seekTo(nextTime / audioDuration)
+        emitCurrentTime(ws)
+    }, [isReady])
+
     const handleSpeedWheel = useCallback((e: React.WheelEvent) => {
         e.preventDefault()
         setPlaybackRate(prev => {
@@ -281,6 +310,14 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
             return Math.max(SPEED_MIN, Math.min(SPEED_MAX, next))
         })
     }, [])
+
+    const handleWaveformWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+        const dominantDelta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+        if (!dominantDelta) return
+
+        e.preventDefault()
+        seekBySeconds(dominantDelta > 0 ? -10 : 10)
+    }, [seekBySeconds])
 
     const commitSpeedInput = useCallback(() => {
         const parsed = parseFloat(speedInputValue)
@@ -321,7 +358,13 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
             )}
 
             {/* Waveform */}
-            <div ref={containerRef} className="w-full" />
+            <div
+                className="w-full"
+                onWheel={handleWaveformWheel}
+                aria-label="Waveform. Scroll to seek by 10 seconds."
+            >
+                <div ref={containerRef} className="w-full" />
+            </div>
 
             {/* Time display */}
             <div className="flex justify-between text-xs text-muted-foreground">
@@ -330,23 +373,46 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
             </div>
 
             {/* Controls */}
-            <div className="relative flex items-center justify-between">
-                {/* Download (far left) */}
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                {/* Download (left) */}
                 <Button variant="outline" size="icon" onClick={handleDownload}
+                    className="justify-self-start h-10 w-10"
                     aria-label="Download audio">
-                    <DownloadSimpleIcon size={20} />
+                    <DownloadSimpleIcon size={24} />
                 </Button>
 
-                {/* Play (center of parent) */}
-                <Button variant="outline" className="absolute left-1/2 -translate-x-1/2 h-9 w-[4.5rem]"
-                    onClick={togglePlay} disabled={!isReady}
-                    aria-label={isPlaying ? 'Pause' : 'Play'}>
-                    {isPlaying ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
-                </Button>
+                {/* Playback controls (center) */}
+                <div className="flex items-center gap-2 justify-self-center">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10"
+                        onClick={() => seekBySeconds(-10)}
+                        disabled={!isReady}
+                        aria-label="Go back 10 seconds"
+                    >
+                        <SeekIcon direction="backward" />
+                    </Button>
+                    <Button variant="outline" className="h-10 w-[5rem]"
+                        onClick={togglePlay} disabled={!isReady}
+                        aria-label={isPlaying ? 'Pause' : 'Play'}>
+                        {isPlaying ? <PauseIcon size={24} /> : <PlayIcon size={24} />}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10"
+                        onClick={() => seekBySeconds(10)}
+                        disabled={!isReady}
+                        aria-label="Go forward 10 seconds"
+                    >
+                        <SeekIcon direction="forward" />
+                    </Button>
+                </div>
 
-                {/* Speed control (far right) */}
+                {/* Speed control (right) */}
                 <div
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 justify-self-end"
                     role="group"
                     aria-label="Playback speed"
                     onWheel={handleSpeedWheel}
