@@ -16,7 +16,7 @@ if (-not (Test-Path $TorchCheckPath)) {
     $torchCheck = & "$VenvPath\Scripts\python.exe" -c "import sys; import torch; sys.exit(0 if torch.cuda.is_available() else 1)" 2>$null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Installing PyTorch with CUDA 12.8..." -ForegroundColor Yellow
-        & "$VenvPath\Scripts\pip.exe" install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+        & "$VenvPath\Scripts\python.exe" -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
         if ($LASTEXITCODE -eq 0) { New-Item -Path $TorchCheckPath -ItemType File -Force | Out-Null }
     } else {
         New-Item -Path $TorchCheckPath -ItemType File -Force | Out-Null
@@ -38,7 +38,7 @@ if ((Test-Path $HashPath) -and (Test-Path $ReqPath)) {
 
 if (-not $skipInstall) {
     Write-Host "Installing Backend Dependencies..." -ForegroundColor Yellow
-    & "$VenvPath\Scripts\pip.exe" install -r $ReqPath --upgrade -q
+    & "$VenvPath\Scripts\python.exe" -m pip install -r $ReqPath --upgrade -q
     if ($LASTEXITCODE -eq 0) {
         (Get-FileHash $ReqPath -Algorithm MD5).Hash | Out-File $HashPath -Encoding UTF8
     }

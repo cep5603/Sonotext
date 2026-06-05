@@ -21,14 +21,14 @@ if not exist "%VENV%\.torch_checked" (
   "%VENV%\Scripts\python.exe" -c "import sys; import torch; sys.exit(0 if torch.cuda.is_available() else 1)" 2>nul
   if errorlevel 1 (
     echo Installing PyTorch with CUDA 12.8...
-    "%VENV%\Scripts\pip.exe" install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+    "%VENV%\Scripts\python.exe" -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
     if errorlevel 1 goto :fail
   )
   type nul > "%VENV%\.torch_checked"
 )
 
 echo Installing backend dependencies...
-"%VENV%\Scripts\pip.exe" install -r "%BACKEND%\requirements.txt" --upgrade
+"%VENV%\Scripts\python.exe" -m pip install -r "%BACKEND%\requirements.txt" --upgrade
 if errorlevel 1 goto :fail
 
 echo Building frontend...
