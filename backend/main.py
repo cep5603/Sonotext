@@ -35,6 +35,7 @@ from voice_profiles import voice_profile_manager, DEFAULT_REFERENCE_TEXT
 from pdf_processor import extract_text_from_pdf
 from history_manager import history_manager
 from project_manager import project_manager
+from bookmark_manager import bookmark_manager
 import llm_service
 import alignment_service
 
@@ -820,6 +821,7 @@ def get_history():
 @app.delete("/api/history/{entry_id}")
 def delete_history(entry_id: str):
     history_manager.delete_entry(entry_id)
+    bookmark_manager.delete_bookmarks(entry_id)
     return {"status": "success"}
 
 class RenameRequest(BaseModel):
@@ -1278,6 +1280,25 @@ def reorder_project_generations(project_id: str, req: ReorderGenerationsRequest)
     if result is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return _resolve_project(result)
+
+
+# Bookmark endpoints
+
+class SaveBookmarksRequest(BaseModel):
+    bookmarks: list[dict]
+
+
+@app.get("/api/bookmarks/{generation_id}")
+def get_bookmarks(generation_id: str):
+    """Get bookmarks for a generation."""
+    return {"bookmarks": bookmark_manager.get_bookmarks(generation_id)}
+
+
+@app.put("/api/bookmarks/{generation_id}")
+def save_bookmarks(generation_id: str, req: SaveBookmarksRequest):
+    """Save bookmarks for a generation (full replacement)."""
+    bookmark_manager.save_bookmarks(generation_id, req.bookmarks)
+    return {"status": "success"}
 
 
 @app.post("/api/parse-pdf")

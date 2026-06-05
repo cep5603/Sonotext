@@ -1,7 +1,7 @@
-import { useState, useCallback, useRef, useEffect } from "react"
+import { useState, useCallback, useRef, useEffect, useMemo } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
-import { SpinnerGapIcon, FileArrowUpIcon, FileTextIcon, ArrowLeftIcon, ClockIcon, SparkleIcon, CaretDownIcon, ArrowsDownUpIcon, CopyIcon, CheckIcon } from "@phosphor-icons/react"
+import { SpinnerGapIcon, FileArrowUpIcon, FileTextIcon, ArrowLeftIcon, ClockIcon, SparkleIcon, CaretDownIcon, ArrowsDownUpIcon, CopyIcon, CheckIcon, BookmarkSimpleIcon, TrashIcon, PlusIcon, InfoIcon } from "@phosphor-icons/react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -21,10 +21,12 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
 import { AudioPlayer, type AudioPlayerHandle } from "./AudioPlayer"
-import { SyncedTextView } from "./SyncedTextView"
+import { SyncedTextView, type TextBookmark } from "./SyncedTextView"
 import { HistorySidebar } from "./HistorySidebar"
 import { SettingsSidebar } from "./SettingsSidebar"
 import { AnimatedLogo } from "./AnimatedLogo"
@@ -72,6 +74,32 @@ function hexToHsl(hex: string): string {
 }
 
 
+// Bookmark API helpers
+async function loadBookmarks(generationId: string): Promise<TextBookmark[]> {
+    try {
+        const res = await fetch(`http://localhost:8000/api/bookmarks/${generationId}`)
+        if (!res.ok) return []
+        const data = await res.json()
+        return data.bookmarks ?? []
+    } catch {
+        return []
+    }
+}
+
+function saveBookmarks(generationId: string, bookmarks: TextBookmark[]) {
+    fetch(`http://localhost:8000/api/bookmarks/${generationId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookmarks }),
+    }).catch(() => { })
+}
+
+function formatBookmarkTime(seconds: number): string {
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
 interface TextToSpeechProps {
     selectedItem: HistoryItem | null
     onSelectedItemChange: (item: HistoryItem | null) => void
@@ -114,6 +142,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
     const [autoScroll, setAutoScroll] = useState(true)
     const audioPlayerRef = useRef<AudioPlayerHandle>(null)
     const [copied, setCopied] = useState(false)
+    const [bookmarks, setBookmarks] = useState<TextBookmark[]>([])
     const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(false)
     const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(false)
     const [cancelConfirmTarget, setCancelConfirmTarget] = useState<"generate" | "clean" | null>(null)
@@ -675,6 +704,79 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
         goToGenerator()
     }, [applySelectedItemSettingsToPrompt, selectedItem])
 
+    // Load bookmarks when selected item changes
+    useEffect(() => {
+        if (selectedItem) {
+            let cancelled = false
+            loadBookmarks(selectedItem.id).then(bm => {
+                if (!cancelled) setBookmarks(bm)
+            })
+            return () => { cancelled = true }
+        } else {
+            setBookmarks([])
+        }
+    }, [selectedItem?.id])
+
+    // Pre-compute the set of bookmarked word indices for SyncedTextView
+    const bookmarkedWordIndices = useMemo(() => {
+        const indices = new Set<number>()
+        for (const bm of bookmarks) {
+            indices.add(bm.wordIndex)
+        }
+        return indices
+    }, [bookmarks])
+
+    const handleAddBookmark = useCallback(() => {
+        if (!selectedItem || !alignmentData || alignmentData.length === 0) return
+
+        const currentTime = audioCurrentTimeRef.current
+        // Find the word closest to current playback time
+        let bestIndex = 0
+        for (let i = 0; i < alignmentData.length; i++) {
+            if (alignmentData[i].start <= currentTime) {
+                bestIndex = i
+            } else {
+                break
+            }
+        }
+
+        // Don't duplicate if a bookmark already exists at this word
+        if (bookmarks.some(b => b.wordIndex === bestIndex)) return
+
+        // Extract preview text: ~30 chars around the bookmarked word
+        const word = alignmentData[bestIndex]
+        const charCenter = word.charStart
+        const previewStart = Math.max(0, charCenter - 15)
+        const previewEnd = Math.min(selectedItem.text.length, charCenter + 30)
+        let preview = selectedItem.text.slice(previewStart, previewEnd).trim()
+        if (previewStart > 0) preview = "…" + preview
+        if (previewEnd < selectedItem.text.length) preview = preview + "…"
+
+        const newBookmark: TextBookmark = {
+            id: crypto.randomUUID(),
+            wordIndex: bestIndex,
+            audioTime: word.start,
+            createdAt: Date.now(),
+            previewText: preview,
+        }
+
+        const updated = [...bookmarks, newBookmark].sort((a, b) => a.audioTime - b.audioTime)
+        setBookmarks(updated)
+        saveBookmarks(selectedItem.id, updated)
+    }, [selectedItem, alignmentData, bookmarks])
+
+    const handleRemoveBookmark = useCallback((bookmarkId: string) => {
+        if (!selectedItem) return
+        const updated = bookmarks.filter(b => b.id !== bookmarkId)
+        setBookmarks(updated)
+        saveBookmarks(selectedItem.id, updated)
+    }, [selectedItem, bookmarks])
+
+    const handleBookmarkSeek = useCallback((audioTime: number) => {
+        setSeekToTime(audioTime)
+        setTimeout(() => setSeekToTime(null), 100)
+    }, [])
+
     // Fetch alignment data when a history item is selected
     useEffect(() => {
         if (!selectedItem) return
@@ -877,25 +979,25 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
 
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                                <span className="font-medium text-foreground flex items-center gap-1">
-                                                    <VoiceSourceIcon voiceProfileId={selectedItem.voice_profile_id} size={14} />
-                                                    {formatVoiceDisplay(selectedItem.voice, selectedItem.voice_profile_id)}
-                                                </span>
-                                                {selectedItem.model && (
-                                                    <>
-                                                        <span>•</span>
-                                                        <span>{selectedItem.model}</span>
-                                                    </>
-                                                )}
-                                                <span>•</span>
-                                                <span>{selectedItem.speed}x</span>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <span className="font-medium text-foreground flex items-center gap-1.5 cursor-default">
+                                                            <VoiceSourceIcon voiceProfileId={selectedItem.voice_profile_id} size={16} />
+                                                            {formatVoiceDisplay(selectedItem.voice, selectedItem.voice_profile_id)}
+                                                            <InfoIcon size={16} className="text-muted-foreground" />
+                                                        </span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="bottom" className="text-xs space-y-1 py-2">
+                                                        {selectedItem.model && <div>Model: {selectedItem.model}</div>}
+                                                        <div>Speed: {selectedItem.speed}x</div>
+                                                        <div>{new Date(selectedItem.timestamp * 1000).toLocaleString()}</div>
+                                                    </TooltipContent>
+                                                </Tooltip>
                                                 <span>•</span>
                                                 <span className="flex items-center gap-1">
                                                     <ClockIcon size={16} />
                                                     {formatDuration(selectedItem.duration)}
                                                 </span>
-                                                <span>•</span>
-                                                <span>{new Date(selectedItem.timestamp * 1000).toLocaleString()}</span>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <div className="flex">
@@ -926,6 +1028,77 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </div>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant={bookmarks.length > 0 ? "secondary" : "ghost"}
+                                                            size="sm"
+                                                            className="gap-2 text-xs relative"
+                                                        >
+                                                            <BookmarkSimpleIcon size={16} weight={bookmarks.length > 0 ? "fill" : "regular"} />
+                                                            Bookmarks
+                                                            {bookmarks.length > 0 && (
+                                                                <span
+                                                                    className="absolute -top-1 -right-1 flex items-center justify-center h-4 min-w-4 px-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-none"
+                                                                    style={activeProjectColor ? { backgroundColor: activeProjectColor, color: '#fff' } : undefined}
+                                                                >
+                                                                    {bookmarks.length}
+                                                                </span>
+                                                            )}
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent align="end" className="w-80 p-0">
+                                                        <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
+                                                            <span className="text-xs font-medium text-muted-foreground">Bookmarks</span>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-7 gap-1.5 text-xs"
+                                                                onClick={handleAddBookmark}
+                                                                disabled={!alignmentData || alignmentData.length === 0}
+                                                            >
+                                                                <PlusIcon size={16} />
+                                                                Add Here
+                                                            </Button>
+                                                        </div>
+                                                        <div className="max-h-60 overflow-y-auto">
+                                                            {bookmarks.length === 0 ? (
+                                                                <p className="px-3 py-6 text-xs text-muted-foreground text-center">
+                                                                    No bookmarks yet. Start playback and click "Add Here" to save your position.
+                                                                </p>
+                                                            ) : (
+                                                                bookmarks.map((bm) => (
+                                                                    <div
+                                                                        key={bm.id}
+                                                                        className="group flex items-start gap-2 px-3 py-2 hover:bg-accent/50 cursor-pointer transition-colors border-b border-border last:border-b-0"
+                                                                        onClick={() => handleBookmarkSeek(bm.audioTime)}
+                                                                    >
+                                                                        <BookmarkSimpleIcon size={16} weight="fill" className="shrink-0 mt-0.5 text-primary" style={activeProjectColor ? { color: activeProjectColor } : undefined} />
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <div className="text-xs font-medium tabular-nums text-foreground">
+                                                                                {formatBookmarkTime(bm.audioTime)}
+                                                                            </div>
+                                                                            <p className="text-[11px] text-muted-foreground truncate leading-tight mt-0.5">
+                                                                                {bm.previewText}
+                                                                            </p>
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-destructive/10 transition-opacity shrink-0"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                handleRemoveBookmark(bm.id)
+                                                                            }}
+                                                                            aria-label="Remove bookmark"
+                                                                        >
+                                                                            <TrashIcon size={16} className="text-destructive" />
+                                                                        </button>
+                                                                    </div>
+                                                                ))
+                                                            )}
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
                                                 <Button
                                                     variant={autoScroll ? "secondary" : "ghost"}
                                                     size="sm"
@@ -945,6 +1118,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                                             onSeek={handleSeek}
                                             isPlaying={isAudioPlaying}
                                             autoScroll={autoScroll}
+                                            bookmarkedWordIndices={bookmarkedWordIndices}
                                         />
 
                                         <AudioPlayer

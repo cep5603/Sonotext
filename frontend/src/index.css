@@ -70,6 +70,13 @@
   animation: shake 0.3s ease-in-out;
 }
 
+/* Bookmark inline marker */
+.bookmark-marker {
+  border-bottom: 2px solid hsl(var(--primary) / 0.6);
+  background-color: hsl(var(--primary) / 0.08);
+  border-radius: 2px;
+}
+
 /* Custom scrollbar styling to match ScrollArea */
 * {
   scrollbar-width: auto;
