@@ -2,6 +2,15 @@ import { useRef, useEffect, useCallback, useMemo, useState, memo } from "react"
 import type { WordTiming } from "@/types"
 import { cn } from "@/lib/utils"
 
+export interface TextBookmark {
+    id: string
+    wordIndex: number
+    audioTime: number
+    label?: string
+    createdAt: number
+    previewText: string
+}
+
 interface SyncedTextViewProps {
     text: string
     alignmentData: WordTiming[] | null
@@ -9,6 +18,7 @@ interface SyncedTextViewProps {
     onSeek: (time: number) => void
     isPlaying: boolean
     autoScroll: boolean
+    bookmarkedWordIndices?: Set<number>
 }
 
 /**
@@ -40,12 +50,13 @@ function findCurrentWordIndex(words: WordTiming[], time: number): number {
     return result
 }
 
-// Memoized word span: only re-renders when isActive or the word itself changes
+// Memoized word span: only re-renders when isActive, isBookmarked, or the word itself changes
 interface WordSpanProps {
     word: WordTiming
     separator: string
     isLast: boolean
     isActive: boolean
+    isBookmarked: boolean
     activeWordRef: React.RefObject<HTMLSpanElement | null>
     onSeek: (time: number) => void
 }
@@ -55,6 +66,7 @@ const WordSpan = memo(function WordSpan({
     separator,
     isLast,
     isActive,
+    isBookmarked,
     activeWordRef,
     onSeek,
 }: WordSpanProps) {
@@ -66,7 +78,8 @@ const WordSpan = memo(function WordSpan({
                 className={cn(
                     "synced-text-word cursor-pointer rounded px-0.5",
                     "hover:bg-primary/10",
-                    isActive && "bg-primary/30"
+                    isActive && "bg-primary/30",
+                    isBookmarked && !isActive && "bookmark-marker"
                 )}
             >
                 {word.word}
@@ -83,7 +96,8 @@ export function SyncedTextView({
     currentTimeRef,
     onSeek,
     isPlaying,
-    autoScroll
+    autoScroll,
+    bookmarkedWordIndices,
 }: SyncedTextViewProps) {
     const containerRef = useRef<HTMLDivElement>(null)
     const activeWordRef = useRef<HTMLSpanElement>(null)
@@ -220,6 +234,7 @@ export function SyncedTextView({
                         separator={separators[index]}
                         isLast={index === alignmentData.length - 1}
                         isActive={index === effectiveWordIndex}
+                        isBookmarked={bookmarkedWordIndices?.has(index) ?? false}
                         activeWordRef={activeWordRef}
                         onSeek={handleWordSeek}
                     />
