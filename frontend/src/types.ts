@@ -7,8 +7,8 @@ export interface HistoryItem {
     duration?: number
     timestamp: number
     url: string
-    model?: string  // TTS engine used: "kokoro", "qwen3-1.7B"
-    engine?: "kokoro" | "qwen3"
+    model?: string  // TTS engine used: "kokoro", "qwen3-1.7B", "ZONOS2"
+    engine?: "kokoro" | "qwen3" | "zonos2"
     lang?: string | null
     instruct?: string | null
     chunk_size?: number

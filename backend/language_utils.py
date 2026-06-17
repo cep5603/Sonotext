@@ -75,6 +75,11 @@ LANGUAGE_NAME_TO_ISO6393 = {
     'ru': 'rus',
     'rus': 'rus',
     'russian': 'rus',
+    # ZONOS2 language codes (locale-style identifiers)
+    'en_us': 'eng',
+    'en_gb': 'eng',
+    'fr_fr': 'fra',
+    'pt_br': 'por',
 }
 
 ISO6393_TO_WHISPER_LANGUAGE = {

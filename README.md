@@ -1,6 +1,6 @@
 # Sonotext
 
-A local text-to-speech application powered by [Kokoro](https://github.com/hexgrad/kokoro) and [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS).
+A local text-to-speech application powered by [Kokoro](https://github.com/hexgrad/kokoro), [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS), and [ZONOS2](https://github.com/Zyphra/ZONOS2).
 
 ![Sonotext Screenshot](frontend/sonotext-app-screenshot-26.4.26.png)
 
@@ -39,3 +39,12 @@ For development, you can still run `start_app.bat` or `.\start_app.ps1` to start
 1. Install [LM Studio](https://lmstudio.ai/).
 2. Load a model and start the local server (default is `http://localhost:1234`).
 3. The text cleanup feature should automatically connect after a bit.
+
+### ZONOS2 (voice cloning, runs in WSL2)
+
+[ZONOS2](https://github.com/Zyphra/ZONOS2) is Linux-only, so Sonotext runs it as a
+server inside WSL2 and proxies to it. Do the one-time setup in
+[`zonos2/SETUP.md`](zonos2/SETUP.md) (install WSL2, run `zonos2/setup_wsl.sh`),
+then pick the **ZONOS2** engine. Sonotext can auto-launch/stop the server from the
+**Model Manager → ZONOS2 Server** panel. Use the **Default** voice or clone a custom
+voice from a short reference clip (created in *Manage Custom Voices*).

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import axios from "axios"
 import {
@@ -14,6 +14,8 @@ import {
 } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
     Dialog,
@@ -84,6 +86,9 @@ function ModelRow({
         }
         if (model.id.startsWith("qwen3:")) {
             return <SparkleIcon size={14} className="text-purple-500 shrink-0" />
+        }
+        if (model.id === "zonos2") {
+            return <WaveformIcon size={14} className="text-emerald-500 shrink-0" />
         }
         return null
     }, [model.id])
@@ -170,6 +175,214 @@ function ModelRow({
     )
 }
 
+interface Zonos2Config {
+    distro: string
+    repo_dir: string
+    model_path: string
+    host: string
+    bind_host: string
+    port: number
+    dtype: string
+    default_voices_dir: string
+    extra_args: string
+    auto_launch: boolean
+}
+
+interface Zonos2Status {
+    running: boolean
+    launching: boolean
+    wsl_available: boolean
+    base_url: string
+    config: Zonos2Config
+    last_error: string | null
+}
+
+// ZONOS2 runs as a server inside WSL2. This panel surfaces its live status and
+// lets the user configure the WSL distro / repo / model and start/stop it.
+function Zonos2Section() {
+    const queryClient = useQueryClient()
+    const { data: status } = useQuery({
+        queryKey: ["zonos2-status"],
+        queryFn: async () => {
+            const res = await axios.get("http://localhost:8000/api/zonos2/status")
+            return res.data as Zonos2Status
+        },
+        refetchInterval: 2000,
+        retry: false,
+    })
+
+    const [form, setForm] = useState<Zonos2Config | null>(null)
+    const initRef = useRef(false)
+    useEffect(() => {
+        if (status?.config && !initRef.current) {
+            setForm(status.config)
+            initRef.current = true
+        }
+    }, [status])
+
+    const saveMutation = useMutation({
+        mutationFn: async (cfg: Zonos2Config) => {
+            await axios.put("http://localhost:8000/api/zonos2/config", cfg)
+        },
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["zonos2-status"] }),
+    })
+
+    const startMutation = useMutation({
+        mutationKey: ["model-action"],
+        mutationFn: async () => {
+            await axios.post("http://localhost:8000/api/zonos2/start")
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["zonos2-status"] })
+            queryClient.invalidateQueries({ queryKey: ["model-registry"] })
+        },
+    })
+
+    const stopMutation = useMutation({
+        mutationKey: ["model-action"],
+        mutationFn: async () => {
+            await axios.post("http://localhost:8000/api/zonos2/stop")
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ["zonos2-status"] })
+            queryClient.invalidateQueries({ queryKey: ["model-registry"] })
+        },
+    })
+
+    if (!form) return null
+
+    const running = !!status?.running
+    const launching = !!status?.launching
+    const wslAvailable = status?.wsl_available !== false
+
+    const update = (key: keyof Zonos2Config, value: string | number | boolean) =>
+        setForm((prev) => (prev ? { ...prev, [key]: value } : prev))
+
+    return (
+        <div className="rounded-lg border border-border/60 bg-card/40 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                    <WaveformIcon size={18} className="text-emerald-400 shrink-0" />
+                    <span className="text-sm font-semibold">ZONOS2 Server (WSL2)</span>
+                    <Badge
+                        variant="secondary"
+                        className={cn(
+                            "text-[10px] px-1.5 py-0 font-normal shrink-0",
+                            running ? "text-emerald-400" : launching ? "text-amber-400" : "text-muted-foreground"
+                        )}
+                    >
+                        {running ? "Running" : launching ? "Launching…" : "Stopped"}
+                    </Badge>
+                </div>
+                {running ? (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2.5 text-xs shrink-0"
+                        onClick={() => stopMutation.mutate()}
+                        disabled={stopMutation.isPending}
+                    >
+                        {stopMutation.isPending ? (
+                            <SpinnerGapIcon size={16} className="animate-spin" />
+                        ) : (
+                            <><PlugsIcon size={16} className="mr-1" />Stop</>
+                        )}
+                    </Button>
+                ) : (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2.5 text-xs shrink-0"
+                        onClick={() => startMutation.mutate()}
+                        disabled={startMutation.isPending || launching || !wslAvailable}
+                    >
+                        {(startMutation.isPending || launching) ? (
+                            <SpinnerGapIcon size={16} className="animate-spin" />
+                        ) : (
+                            <><PlugIcon size={16} className="mr-1" />Start</>
+                        )}
+                    </Button>
+                )}
+            </div>
+
+            {!wslAvailable && (
+                <p className="text-xs text-amber-500">
+                    WSL2 was not detected. Install WSL2 and set up ZONOS2 (see zonos2/SETUP.md).
+                </p>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">WSL distro</Label>
+                    <Input
+                        className="h-8 text-xs"
+                        placeholder="(default)"
+                        value={form.distro}
+                        onChange={(e) => update("distro", e.target.value)}
+                    />
+                </div>
+                <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Port</Label>
+                    <Input
+                        className="h-8 text-xs"
+                        type="number"
+                        value={form.port}
+                        onChange={(e) => update("port", Number(e.target.value) || 1919)}
+                    />
+                </div>
+                <div className="space-y-1 col-span-2">
+                    <Label className="text-xs text-muted-foreground">Repo path (in WSL)</Label>
+                    <Input
+                        className="h-8 text-xs font-mono"
+                        value={form.repo_dir}
+                        onChange={(e) => update("repo_dir", e.target.value)}
+                    />
+                </div>
+                <div className="space-y-1 col-span-2">
+                    <Label className="text-xs text-muted-foreground">Model path</Label>
+                    <Input
+                        className="h-8 text-xs font-mono"
+                        value={form.model_path}
+                        onChange={(e) => update("model_path", e.target.value)}
+                    />
+                </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+                <button
+                    type="button"
+                    onClick={() => update("auto_launch", !form.auto_launch)}
+                    className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
+                >
+                    <span className={cn(
+                        "inline-flex h-4 w-7 items-center rounded-full transition-colors",
+                        form.auto_launch ? "bg-emerald-500/70" : "bg-muted"
+                    )}>
+                        <span className={cn(
+                            "h-3 w-3 rounded-full bg-white transition-transform mx-0.5",
+                            form.auto_launch && "translate-x-3"
+                        )} />
+                    </span>
+                    Auto-launch on generate
+                </button>
+                <Button
+                    size="sm"
+                    className="h-7 px-3 text-xs"
+                    onClick={() => form && saveMutation.mutate(form)}
+                    disabled={saveMutation.isPending}
+                >
+                    {saveMutation.isPending ? <SpinnerGapIcon size={14} className="animate-spin mr-1" /> : null}
+                    Save
+                </Button>
+            </div>
+
+            {status?.last_error && !running && (
+                <p className="text-xs text-destructive break-words">{status.last_error}</p>
+            )}
+        </div>
+    )
+}
+
 export function ModelManagerDialog({ open, onOpenChange }: ModelManagerDialogProps) {
     const queryClient = useQueryClient()
     const [pendingId, setPendingId] = useState<string | null>(null)
@@ -217,6 +430,8 @@ export function ModelManagerDialog({ open, onOpenChange }: ModelManagerDialogPro
         const models = data?.models ?? []
         const grouped: Record<string, ModelEntry[]> = {}
         for (const m of models) {
+            // ZONOS2 has its own dedicated config panel; skip the generic row.
+            if (m.id === "zonos2") continue
             const cat = m.category
             if (!grouped[cat]) grouped[cat] = []
             grouped[cat].push(m)
@@ -255,6 +470,7 @@ export function ModelManagerDialog({ open, onOpenChange }: ModelManagerDialogPro
 
                 <ScrollArea className="flex-1 min-h-0">
                     <div className="px-4 py-3 space-y-5">
+                        <Zonos2Section />
                         {groups.map(([category, models]) => {
                             const meta = CATEGORY_META[category]
                             return (

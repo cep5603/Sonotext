@@ -18,6 +18,7 @@ from sse_starlette.sse import EventSourceResponse
 import io
 import re
 import json
+import base64
 import soundfile as sf
 import numpy as np
 import logging
@@ -31,6 +32,7 @@ from language_utils import (
 )
 from model_manager import model_manager
 from qwen_tts_manager import qwen3_manager
+from zonos_manager import zonos2_manager
 from voice_profiles import voice_profile_manager, DEFAULT_REFERENCE_TEXT
 from pdf_processor import extract_text_from_pdf
 from history_manager import history_manager
@@ -113,10 +115,11 @@ class GenerateRequest(BaseModel):
     voice: str = "af_heart"
     speed: float = 1.0
     lang: str | None = None  # None means auto-detect from voice
-    engine: str = "kokoro"  # "kokoro" or "qwen3"
+    engine: str = "kokoro"  # "kokoro", "qwen3", or "zonos2"
     instruct: str | None = None  # Qwen3-TTS emotion/style instruction
     voice_profile_id: str | None = None  # Custom voice profile for cloning
     chunk_size: int = 500  # Max characters per chunk for TTS
+    seed: int | None = None  # ZONOS2 sampling seed (optional, for reproducibility)
 
 class CleanupRequest(BaseModel):
     text: str
@@ -260,6 +263,8 @@ def get_voices(engine: str = "kokoro"):
     """Return available voice IDs for the specified engine."""
     if engine == "qwen3":
         return {"voices": qwen3_manager.get_voices()}
+    if engine == "zonos2":
+        return {"voices": zonos2_manager.get_voices()}
     if not model_manager.voices:
         return {"voices": []}
     return {"voices": model_manager.voices}
@@ -281,6 +286,12 @@ def get_engines():
                 "name": "Qwen3-TTS",
                 "description": "Expressive, multilingual TTS (1.7B params)",
                 "loaded": qwen3_manager.is_loaded,
+            },
+            {
+                "id": "zonos2",
+                "name": "ZONOS2",
+                "description": "High-fidelity voice cloning TTS (runs in WSL2)",
+                "loaded": zonos2_manager.is_server_running(),
             },
         ]
     }
@@ -308,6 +319,56 @@ def unload_qwen3_model():
     """Unload the Qwen3-TTS model to free VRAM."""
     qwen3_manager.unload_model()
     return {"status": "success"}
+
+
+# ZONOS2 (runs as a server inside WSL2)
+
+@app.get("/api/zonos2/status")
+def get_zonos2_status():
+    """Get ZONOS2 server status (running, launching, WSL availability, config)."""
+    return zonos2_manager.status()
+
+
+@app.get("/api/zonos2/config")
+def get_zonos2_config():
+    """Get the ZONOS2 launch configuration."""
+    return zonos2_manager.get_config()
+
+
+class Zonos2ConfigRequest(BaseModel):
+    distro: str | None = None
+    repo_dir: str | None = None
+    model_path: str | None = None
+    host: str | None = None
+    bind_host: str | None = None
+    port: int | None = None
+    dtype: str | None = None
+    default_voices_dir: str | None = None
+    extra_args: str | None = None
+    auto_launch: bool | None = None
+
+
+@app.put("/api/zonos2/config")
+def update_zonos2_config(req: Zonos2ConfigRequest):
+    """Update the ZONOS2 launch configuration."""
+    patch = {k: v for k, v in req.model_dump().items() if v is not None}
+    return zonos2_manager.update_config(patch)
+
+
+@app.post("/api/zonos2/start")
+async def start_zonos2_server():
+    """Launch the ZONOS2 server inside WSL2 (non-blocking)."""
+    try:
+        return await asyncio.to_thread(zonos2_manager.start_server)
+    except Exception as e:
+        logging.error(f"Failed to start ZONOS2 server: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/zonos2/stop")
+async def stop_zonos2_server():
+    """Stop the ZONOS2 server running inside WSL2."""
+    return await asyncio.to_thread(zonos2_manager.stop_server)
 
 
 def _build_model_registry() -> list[dict]:
@@ -350,6 +411,28 @@ def _build_model_registry() -> list[dict]:
             "can_unload": is_this_loaded,
             "can_load": not is_this_loaded,
         })
+
+    # ZONOS2 (server in WSL2)
+    zonos2_status = zonos2_manager.status()
+    zonos2_running = zonos2_status.get("running", False)
+    zonos2_launching = zonos2_status.get("launching", False)
+    if not zonos2_status.get("wsl_available", False):
+        zonos2_detail = "WSL2 not available"
+    elif zonos2_status.get("last_error") and not zonos2_running:
+        zonos2_detail = "Startup failed — see logs"
+    else:
+        zonos2_detail = "WSL2 server"
+    models.append({
+        "id": "zonos2",
+        "name": "ZONOS2",
+        "category": "tts",
+        "loaded": zonos2_running,
+        "loading": zonos2_launching,
+        "size_label": "MoE TTS",
+        "detail": zonos2_detail,
+        "can_unload": zonos2_running,
+        "can_load": not zonos2_running and not zonos2_launching,
+    })
 
     # CTC Forced Aligner
     alignment_loaded = alignment_service.is_loaded()
@@ -422,6 +505,10 @@ def load_model_by_id(model_id: str):
             qwen3_manager.load_model(model_key)
             return {"status": "success"}
 
+        if model_id == "zonos2":
+            zonos2_manager.start_server()
+            return {"status": "success"}
+
         if model_id == "alignment":
             alignment_service.load_model()
             return {"status": "success"}
@@ -457,6 +544,10 @@ def unload_model_by_id(model_id: str):
 
         if model_id.startswith("qwen3:"):
             qwen3_manager.unload_model()
+            return {"status": "success"}
+
+        if model_id == "zonos2":
+            zonos2_manager.stop_server()
             return {"status": "success"}
 
         if model_id == "alignment":
@@ -785,6 +876,9 @@ async def get_status_stream():
                     # Qwen3 Status
                     qwen3_info = qwen3_manager.get_model_info()
 
+                    # ZONOS2 (WSL2 server) status
+                    zonos2_status = zonos2_manager.status()
+
                     # Full model registry
                     model_registry = _build_model_registry()
 
@@ -794,6 +888,7 @@ async def get_status_stream():
                         "llm_status": llm_status,
                         "llm_models": llm_models,
                         "qwen3_info": qwen3_info,
+                        "zonos2_status": zonos2_status,
                         "model_registry": model_registry,
                     }
 
@@ -984,8 +1079,10 @@ async def generate_audio(req: GenerateRequest):
             all_samples = []
             sample_rate = None
             
-            # If using a voice profile, set up cloning
-            voice_clone_prompt = None
+            # If using a voice profile, set up cloning (engine-specific)
+            voice_clone_prompt = None       # Qwen3-TTS reusable clone prompt
+            zonos_speaker_b64 = None        # ZONOS2 reference clip (base64 WAV)
+            zonos_speaker_name = None
             voice_name = req.voice  # Default to speaker name
             if req.voice_profile_id:
                 yield {
@@ -1004,16 +1101,21 @@ async def generate_audio(req: GenerateRequest):
                 if ref_audio is None:
                     raise ValueError(f"Reference audio not found for profile: {req.voice_profile_id}")
                 
-                # Load Base model for cloning
-                await asyncio.to_thread(qwen3_manager.load_model, "base-1.7B")
-                
-                # Create voice clone prompt (reusable for all chunks)
-                voice_clone_prompt = await asyncio.to_thread(
-                    qwen3_manager.create_voice_clone_prompt,
-                    ref_audio[0],
-                    ref_audio[1],
-                    profile.reference_text,
-                )
+                if req.engine == "zonos2":
+                    # ZONOS2 clones zero-shot from a base64-encoded reference clip.
+                    buffer = io.BytesIO()
+                    sf.write(buffer, ref_audio[0], ref_audio[1], format="WAV")
+                    zonos_speaker_b64 = base64.b64encode(buffer.getvalue()).decode("ascii")
+                    zonos_speaker_name = profile.name
+                else:
+                    # Qwen3-TTS: load Base model and build a reusable clone prompt.
+                    await asyncio.to_thread(qwen3_manager.load_model, "base-1.7B")
+                    voice_clone_prompt = await asyncio.to_thread(
+                        qwen3_manager.create_voice_clone_prompt,
+                        ref_audio[0],
+                        ref_audio[1],
+                        profile.reference_text,
+                    )
             
             for i, chunk in enumerate(chunks):
                 progress = int((i / total_chunks) * 100)
@@ -1028,7 +1130,17 @@ async def generate_audio(req: GenerateRequest):
                 }
                 
                 # Use the appropriate TTS engine (run in thread to avoid blocking)
-                if voice_clone_prompt is not None:
+                if req.engine == "zonos2":
+                    # ZONOS2 runs in WSL2; speaker clip (if any) drives voice cloning.
+                    samples, sr = await asyncio.to_thread(
+                        zonos2_manager.generate,
+                        chunk,
+                        req.lang or "en_us",
+                        zonos_speaker_b64,
+                        zonos_speaker_name,
+                        req.seed,
+                    )
+                elif voice_clone_prompt is not None:
                     # Voice cloning mode - uses Base model
                     samples, sr = await asyncio.to_thread(
                         qwen3_manager.generate_voice_clone,
@@ -1087,6 +1199,8 @@ async def generate_audio(req: GenerateRequest):
             # Build model identifier for history
             if req.engine == "qwen3":
                 model_name = "Qwen3-TTS"
+            elif req.engine == "zonos2":
+                model_name = "ZONOS2"
             else:
                 model_name = "Kokoro"
             

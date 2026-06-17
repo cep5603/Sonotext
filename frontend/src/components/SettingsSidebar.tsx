@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react"
 import { useQuery, useIsMutating } from "@tanstack/react-query"
 import axios from "axios"
-import { LightningIcon, SparkleIcon, MicrophoneIcon, PaletteIcon, CaretDownIcon, CheckIcon, SidebarSimpleIcon, HardDrivesIcon, SpinnerGapIcon, FileTextIcon } from "@phosphor-icons/react"
+import { LightningIcon, SparkleIcon, WaveformIcon, MicrophoneIcon, PaletteIcon, CaretDownIcon, CheckIcon, SidebarSimpleIcon, HardDrivesIcon, SpinnerGapIcon, FileTextIcon } from "@phosphor-icons/react"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
@@ -25,6 +25,7 @@ import { VoiceManagerDialog } from "./VoiceManagerDialog"
 import { CreateVoiceDialog } from "./CustomVoicesSection"
 import { ModelManagerDialog } from "./ModelManagerDialog"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
 import type { VoiceProfile } from "@/types"
@@ -37,12 +38,14 @@ interface SettingsSidebarProps {
     onLangChange: (lang: string | null) => void
     speed: number[]
     onSpeedChange: (speed: number[]) => void
-    engine: "kokoro" | "qwen3"
-    onEngineChange: (engine: "kokoro" | "qwen3") => void
+    engine: "kokoro" | "qwen3" | "zonos2"
+    onEngineChange: (engine: "kokoro" | "qwen3" | "zonos2") => void
     instruct: string
     onInstructChange: (instruct: string) => void
     voiceProfileId: string | null
     onVoiceProfileChange: (profileId: string | null) => void
+    seed: string
+    onSeedChange: (seed: string) => void
     chunkSize: number[]
     onChunkSizeChange: (size: number[]) => void
     collapsed: boolean
@@ -72,6 +75,20 @@ const QWEN3_LANGUAGE_OPTIONS = [
     { value: "spanish", label: "Spanish" },
     { value: "portuguese", label: "Portuguese" },
     { value: "russian", label: "Russian" },
+]
+
+// Languages supported by the ZONOS2 /tts/generate endpoint
+const ZONOS2_LANGUAGE_OPTIONS = [
+    { value: "en_us", label: "English (US)" },
+    { value: "en_gb", label: "English (UK)" },
+    { value: "fr_fr", label: "French" },
+    { value: "de", label: "German" },
+    { value: "es", label: "Spanish" },
+    { value: "it", label: "Italian" },
+    { value: "pt_br", label: "Portuguese (BR)" },
+    { value: "ja", label: "Japanese" },
+    { value: "cmn", label: "Mandarin Chinese" },
+    { value: "ko", label: "Korean" },
 ]
 
 
@@ -263,6 +280,129 @@ function Qwen3VoiceSelector({
 }
 
 
+// Voice selector for ZONOS2 (default voice + custom cloned voices)
+function Zonos2VoiceSelector({
+    onVoiceChange,
+    voiceProfileId,
+    onVoiceProfileChange,
+}: {
+    onVoiceChange: (voice: string) => void
+    voiceProfileId: string | null
+    onVoiceProfileChange: (profileId: string | null) => void
+}) {
+    const [open, setOpen] = useState(false)
+
+    const { data: profiles } = useQuery({
+        queryKey: ["voice-profiles"],
+        queryFn: async () => {
+            const res = await axios.get("http://localhost:8000/api/voice-profiles")
+            return res.data.profiles as VoiceProfile[]
+        },
+    })
+
+    const selectDefault = () => {
+        onVoiceProfileChange(null)
+        onVoiceChange("default")
+        setOpen(false)
+    }
+
+    const selectCustom = (profileId: string) => {
+        onVoiceProfileChange(profileId)
+        setOpen(false)
+    }
+
+    const getDisplayLabel = () => {
+        if (voiceProfileId) {
+            const profile = profiles?.find((p) => p.id === voiceProfileId)
+            return (
+                <span className="flex items-center gap-1.5">
+                    <MicrophoneIcon size={14} className="shrink-0 text-blue-500" />
+                    {profile ? profile.name : "Custom Voice"}
+                </span>
+            )
+        }
+        return (
+            <span className="flex items-center gap-1.5">
+                <WaveformIcon size={14} className="shrink-0 text-emerald-500" />
+                Default
+            </span>
+        )
+    }
+
+    return (
+        <DropdownMenu open={open} onOpenChange={setOpen}>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    className="w-full justify-between font-normal px-3"
+                >
+                    <span className="truncate">{getDisplayLabel()}</span>
+                    <CaretDownIcon className={cn(
+                        "h-4 w-4 shrink-0 opacity-50 transition-transform duration-200",
+                        open && "rotate-180"
+                    )} />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+                className="w-[var(--radix-dropdown-menu-trigger-width)] p-0"
+                align="start"
+                sideOffset={4}
+            >
+                <ScrollArea className="max-h-[300px]">
+                    <div className="p-1 space-y-0.5">
+                        <button
+                            onClick={selectDefault}
+                            className={cn(
+                                "w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-150",
+                                "hover:bg-accent/50 focus:outline-none focus:bg-accent/50",
+                                !voiceProfileId && "bg-accent"
+                            )}
+                        >
+                            <WaveformIcon size={16} className="text-emerald-500 shrink-0" />
+                            <span className="flex-1 text-left text-sm font-medium truncate">Default</span>
+                            {!voiceProfileId && (
+                                <CheckIcon size={16} className="text-primary shrink-0" />
+                            )}
+                        </button>
+
+                        {profiles && profiles.length > 0 && (
+                            <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Cloned Voices
+                            </div>
+                        )}
+                        {profiles?.map((profile) => (
+                            <button
+                                key={profile.id}
+                                onClick={() => selectCustom(profile.id)}
+                                className={cn(
+                                    "w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-150",
+                                    "hover:bg-accent/50 focus:outline-none focus:bg-accent/50",
+                                    voiceProfileId === profile.id && "bg-accent"
+                                )}
+                            >
+                                {profile.source === "designed" ? (
+                                    <PaletteIcon size={16} className="text-purple-500 shrink-0" />
+                                ) : (
+                                    <MicrophoneIcon size={16} className="text-blue-500 shrink-0" />
+                                )}
+                                <span className="flex-1 text-left text-sm font-medium truncate">
+                                    {profile.name}
+                                </span>
+                                {voiceProfileId === profile.id && (
+                                    <CheckIcon size={16} className="text-primary shrink-0" />
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                </ScrollArea>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
+
+
 // Model Manager footer with live status
 function ModelManagerFooter({ collapsed, onOpen }: { collapsed: boolean; onOpen: () => void }) {
     const { data } = useQuery<{ models: { loaded: boolean; loading?: boolean }[] }>({
@@ -327,6 +467,8 @@ export function SettingsSidebar({
     onInstructChange,
     voiceProfileId,
     onVoiceProfileChange,
+    seed,
+    onSeedChange,
     chunkSize,
     onChunkSizeChange,
     collapsed,
@@ -380,7 +522,7 @@ export function SettingsSidebar({
                         <Label>TTS Engine</Label>
                         <Select
                             value={engine}
-                            onValueChange={(v) => onEngineChange(v as "kokoro" | "qwen3")}
+                            onValueChange={(v) => onEngineChange(v as "kokoro" | "qwen3" | "zonos2")}
                         >
                             <SelectTrigger className="w-full">
                                 <SelectValue />
@@ -396,6 +538,12 @@ export function SettingsSidebar({
                                     <div className="flex items-center gap-2">
                                         <SparkleIcon size={16} className="text-purple-500" />
                                         <span>Qwen3-TTS</span>
+                                    </div>
+                                </SelectItem>
+                                <SelectItem value="zonos2">
+                                    <div className="flex items-center gap-2">
+                                        <WaveformIcon size={16} className="text-emerald-500" />
+                                        <span>ZONOS2</span>
                                     </div>
                                 </SelectItem>
                             </SelectContent>
@@ -448,6 +596,48 @@ export function SettingsSidebar({
                         </>
                     )}
 
+                    {/* ZONOS2-specific settings */}
+                    {engine === "zonos2" && (
+                        <>
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <Label>Voice</Label>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-2 text-xs"
+                                        onClick={() => setVoiceManagerOpen(true)}
+                                    >
+                                        Manage...
+                                    </Button>
+                                </div>
+                                <Zonos2VoiceSelector
+                                    onVoiceChange={onVoiceChange}
+                                    voiceProfileId={voiceProfileId}
+                                    onVoiceProfileChange={onVoiceProfileChange}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Pick a custom voice to clone it, or use the model's default voice.
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>
+                                    <span>Seed</span>
+                                    <span className="text-xs text-muted-foreground ml-2">(optional)</span>
+                                </Label>
+                                <Input
+                                    type="number"
+                                    inputMode="numeric"
+                                    placeholder="Random"
+                                    value={seed}
+                                    onChange={(e) => onSeedChange(e.target.value)}
+                                    className="text-sm"
+                                />
+                            </div>
+                        </>
+                    )}
+
                     <div className="space-y-2">
                         <Label>Language</Label>
                         <Select
@@ -458,7 +648,7 @@ export function SettingsSidebar({
                                 <SelectValue placeholder="Select language" />
                             </SelectTrigger>
                             <SelectContent>
-                                {(engine === "qwen3" ? QWEN3_LANGUAGE_OPTIONS : KOKORO_LANGUAGE_OPTIONS).map((opt) => (
+                                {(engine === "qwen3" ? QWEN3_LANGUAGE_OPTIONS : engine === "zonos2" ? ZONOS2_LANGUAGE_OPTIONS : KOKORO_LANGUAGE_OPTIONS).map((opt) => (
                                     <SelectItem key={opt.value} value={opt.value}>
                                         {opt.label}
                                     </SelectItem>

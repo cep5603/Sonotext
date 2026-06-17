@@ -113,9 +113,10 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
     const [voice, setVoice] = useState("af_heart")
     const [lang, setLang] = useState<string | null>(null)  // null = auto-detect
     const [speed, setSpeed] = useState([1.0])
-    const [engine, setEngine] = useState<"kokoro" | "qwen3">("kokoro")
+    const [engine, setEngine] = useState<"kokoro" | "qwen3" | "zonos2">("kokoro")
     const [instruct, setInstruct] = useState("")  // Qwen3-TTS emotion/style instruction
     const [voiceProfileId, setVoiceProfileId] = useState<string | null>(null)  // Custom voice for cloning
+    const [seed, setSeed] = useState("")  // ZONOS2 sampling seed (optional)
     const [chunkSize, setChunkSize] = useState([500])  // Max chars per TTS chunk
     const [audioUrl, setAudioUrl] = useState<string | null>(null)
     const [audioFilename, setAudioFilename] = useState<string | undefined>(undefined)
@@ -302,11 +303,15 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
         }
         if (engine === "qwen3") {
             setVoice("aiden")
+            setLang(null)
+        } else if (engine === "zonos2") {
+            setVoice("default")
+            // ZONOS2 has no "auto" language; default to English (US)
+            setLang("en_us")
         } else {
             setVoice("af_heart")
+            setLang(null)
         }
-        // Reset language to auto since codes differ between engines
-        setLang(null)
     }, [engine])
 
     // Update page title with progress percentage during generation
@@ -377,8 +382,9 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                     lang,
                     engine,
                     instruct: engine === "qwen3" && instruct ? instruct : null,
-                    voice_profile_id: engine === "qwen3" && voiceProfileId ? voiceProfileId : null,
+                    voice_profile_id: (engine === "qwen3" || engine === "zonos2") && voiceProfileId ? voiceProfileId : null,
                     chunk_size: chunkSize[0],
+                    seed: engine === "zonos2" && seed.trim() !== "" && !Number.isNaN(Number(seed)) ? Number(seed) : null,
                 }),
             })
 
@@ -434,7 +440,7 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
             setCancelConfirmTarget((current) => (current === "generate" ? null : current))
             setIsGenerating(false)
         }
-    }, [text, voice, lang, speed, engine, instruct, voiceProfileId, chunkSize, queryClient])
+    }, [text, voice, lang, speed, engine, instruct, voiceProfileId, seed, chunkSize, queryClient])
 
     const handleCleanText = useCallback(async (): Promise<boolean> => {
         setIsCleaning(true)
@@ -651,7 +657,13 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
     }
 
     const applySelectedItemSettingsToPrompt = useCallback((item: HistoryItem) => {
-        const resolvedEngine = item.engine ?? (item.model?.toLowerCase().includes("qwen") ? "qwen3" : "kokoro")
+        const resolvedEngine = item.engine ?? (
+            item.model?.toLowerCase().includes("qwen")
+                ? "qwen3"
+                : item.model?.toLowerCase().includes("zonos")
+                    ? "zonos2"
+                    : "kokoro"
+        )
         suppressEngineDefaultsRef.current = true
         setEngine(resolvedEngine)
         setLang(item.lang ?? null)
@@ -682,6 +694,25 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                     setMissingProfileWarning(item.voice)
                 }
             }
+            return
+        }
+
+        if (resolvedEngine === "zonos2") {
+            setInstruct("")
+            setLang(item.lang ?? "en_us")
+            if (item.voice_profile_id) {
+                const profiles = queryClient.getQueryData<VoiceProfile[]>(["voice-profiles"])
+                const profileExists = profiles?.some((p) => p.id === item.voice_profile_id)
+                if (profileExists) {
+                    setVoiceProfileId(item.voice_profile_id)
+                } else {
+                    setVoiceProfileId(null)
+                    setMissingProfileWarning(item.voice_profile_id)
+                }
+            } else {
+                setVoiceProfileId(null)
+            }
+            setVoice("default")
             return
         }
 
@@ -858,6 +889,8 @@ export function TextToSpeech({ selectedItem, onSelectedItemChange, resetToGenera
                 onInstructChange={setInstruct}
                 voiceProfileId={voiceProfileId}
                 onVoiceProfileChange={setVoiceProfileId}
+                seed={seed}
+                onSeedChange={setSeed}
                 chunkSize={chunkSize}
                 onChunkSizeChange={setChunkSize}
                 collapsed={isSettingsCollapsed}
