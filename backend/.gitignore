@@ -22,6 +22,7 @@ voice_profiles/
 # Runtime/session data
 history.json
 projects.json
+bookmarks.json
 
 # IDE / Editor
 .vscode/
