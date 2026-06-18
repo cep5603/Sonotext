@@ -23,6 +23,7 @@ voice_profiles/
 history.json
 projects.json
 bookmarks.json
+zonos2_config.json
 
 # IDE / Editor
 .vscode/

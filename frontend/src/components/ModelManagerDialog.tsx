@@ -346,6 +346,26 @@ function Zonos2Section() {
                         onChange={(e) => update("model_path", e.target.value)}
                     />
                 </div>
+                <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">dtype</Label>
+                    <Input
+                        className="h-8 text-xs"
+                        placeholder="auto"
+                        value={form.dtype}
+                        onChange={(e) => update("dtype", e.target.value)}
+                    />
+                </div>
+                <div className="space-y-1 col-span-2">
+                    <Label className="text-xs text-muted-foreground">
+                        Extra server args (low-VRAM, etc.)
+                    </Label>
+                    <Input
+                        className="h-8 text-xs font-mono"
+                        placeholder="--max-running-requests 1 --memory-ratio 0.95"
+                        value={form.extra_args}
+                        onChange={(e) => update("extra_args", e.target.value)}
+                    />
+                </div>
             </div>
 
             <div className="flex items-center justify-between">

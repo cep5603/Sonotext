@@ -350,53 +350,51 @@ function Zonos2VoiceSelector({
                 align="start"
                 sideOffset={4}
             >
-                <ScrollArea className="max-h-[300px]">
-                    <div className="p-1 space-y-0.5">
+                <div className="max-h-[300px] overflow-y-auto p-1 space-y-0.5">
+                    <button
+                        onClick={selectDefault}
+                        className={cn(
+                            "w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-150",
+                            "hover:bg-accent/50 focus:outline-none focus:bg-accent/50",
+                            !voiceProfileId && "bg-accent"
+                        )}
+                    >
+                        <WaveformIcon size={16} className="text-emerald-500 shrink-0" />
+                        <span className="flex-1 text-left text-sm font-medium truncate">Default</span>
+                        {!voiceProfileId && (
+                            <CheckIcon size={16} className="text-primary shrink-0" />
+                        )}
+                    </button>
+
+                    {profiles && profiles.length > 0 && (
+                        <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Cloned Voices
+                        </div>
+                    )}
+                    {profiles?.map((profile) => (
                         <button
-                            onClick={selectDefault}
+                            key={profile.id}
+                            onClick={() => selectCustom(profile.id)}
                             className={cn(
                                 "w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-150",
                                 "hover:bg-accent/50 focus:outline-none focus:bg-accent/50",
-                                !voiceProfileId && "bg-accent"
+                                voiceProfileId === profile.id && "bg-accent"
                             )}
                         >
-                            <WaveformIcon size={16} className="text-emerald-500 shrink-0" />
-                            <span className="flex-1 text-left text-sm font-medium truncate">Default</span>
-                            {!voiceProfileId && (
+                            {profile.source === "designed" ? (
+                                <PaletteIcon size={16} className="text-purple-500 shrink-0" />
+                            ) : (
+                                <MicrophoneIcon size={16} className="text-blue-500 shrink-0" />
+                            )}
+                            <span className="flex-1 text-left text-sm font-medium truncate">
+                                {profile.name}
+                            </span>
+                            {voiceProfileId === profile.id && (
                                 <CheckIcon size={16} className="text-primary shrink-0" />
                             )}
                         </button>
-
-                        {profiles && profiles.length > 0 && (
-                            <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Cloned Voices
-                            </div>
-                        )}
-                        {profiles?.map((profile) => (
-                            <button
-                                key={profile.id}
-                                onClick={() => selectCustom(profile.id)}
-                                className={cn(
-                                    "w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-150",
-                                    "hover:bg-accent/50 focus:outline-none focus:bg-accent/50",
-                                    voiceProfileId === profile.id && "bg-accent"
-                                )}
-                            >
-                                {profile.source === "designed" ? (
-                                    <PaletteIcon size={16} className="text-purple-500 shrink-0" />
-                                ) : (
-                                    <MicrophoneIcon size={16} className="text-blue-500 shrink-0" />
-                                )}
-                                <span className="flex-1 text-left text-sm font-medium truncate">
-                                    {profile.name}
-                                </span>
-                                {voiceProfileId === profile.id && (
-                                    <CheckIcon size={16} className="text-primary shrink-0" />
-                                )}
-                            </button>
-                        ))}
-                    </div>
-                </ScrollArea>
+                    ))}
+                </div>
             </DropdownMenuContent>
         </DropdownMenu>
     )

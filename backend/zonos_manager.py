@@ -206,7 +206,7 @@ class Zonos2Manager:
         distro = str(cfg.get("distro", "")).strip()
         if distro:
             args += ["-d", distro]
-        args += ["--", "bash", "-lic", inner]
+        args += ["--", "bash", "-lc", inner]
         return args
 
     def start_server(self) -> dict:
