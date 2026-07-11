@@ -12,7 +12,7 @@ import {
 import { useDroppable } from "@dnd-kit/core"
 import { useSortable, SortableContext, verticalListSortingStrategy, rectSortingStrategy } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { cn } from "@/lib/utils"
+import { cn, withAlpha } from "@/lib/utils"
 import { formatVoiceDisplay } from "@/lib/voiceData"
 import { VoiceSourceIcon } from "./VoiceSourceIcon"
 import type { HistoryItem, Project } from "@/types"
@@ -95,13 +95,13 @@ function SortableGenerationCard({ gen, projectId, projectColor, onSelect, onPlay
         <div
             ref={setNodeRef}
             className={cn(
-                "group rounded-lg border border-border bg-background p-3 transition-colors hover:bg-accent/50 cursor-pointer overflow-hidden",
+                "group rounded-lg border border-border bg-background p-3 transition-all cursor-pointer overflow-hidden",
+                projectColor ? "hover:brightness-75" : "hover:bg-accent/50",
                 isDragging && "opacity-50 z-50 shadow-2xl"
             )}
             style={{
                 ...style,
-                borderLeftWidth: projectColor ? '3px' : undefined,
-                borderLeftColor: projectColor || undefined,
+                ...(projectColor ? { backgroundColor: withAlpha(projectColor, 0.08), borderColor: withAlpha(projectColor, 0.35) } : {}),
             }}
             onClick={onSelect}
         >
@@ -171,14 +171,13 @@ function SortableGenerationTile({ gen, projectId, projectColor, onSelect, onPlay
         <div
             ref={setNodeRef}
             className={cn(
-                "group relative rounded-xl border bg-background p-4 transition-colors cursor-pointer overflow-hidden",
-                "hover:bg-accent/50 hover:border-accent-foreground/20",
+                "group relative rounded-xl border bg-background p-4 transition-all cursor-pointer overflow-hidden",
+                projectColor ? "hover:brightness-75" : "hover:bg-accent/50 hover:border-accent-foreground/20",
                 isDragging && "opacity-50 z-50 shadow-2xl"
             )}
             style={{
                 ...style,
-                borderLeftWidth: projectColor ? '3px' : undefined,
-                borderLeftColor: projectColor || undefined,
+                ...(projectColor ? { backgroundColor: withAlpha(projectColor, 0.08), borderColor: withAlpha(projectColor, 0.35) } : {}),
             }}
             onClick={onSelect}
         >

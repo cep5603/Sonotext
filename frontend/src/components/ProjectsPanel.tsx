@@ -11,7 +11,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
-import { cn } from "@/lib/utils"
+import { cn, withAlpha } from "@/lib/utils"
 import { useSortable, SortableContext, rectSortingStrategy, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import type { Project } from "@/types"
@@ -86,15 +86,14 @@ function ProjectTile({ project, onOpen, onRename, onDelete, onColorChange }: Sor
         <div
             ref={setNodeRef}
             className={cn(
-                "group relative rounded-xl border bg-background p-4 transition-colors cursor-pointer overflow-hidden",
-                "hover:bg-accent/50 hover:border-accent-foreground/20",
+                "group relative rounded-xl border bg-background p-4 transition-all cursor-pointer overflow-hidden",
+                project.color ? "hover:brightness-75" : "hover:bg-accent/50 hover:border-accent-foreground/20",
                 isOver && "border-primary bg-primary/10 ring-2 ring-primary/30",
                 isDragging && "opacity-50 z-50 shadow-2xl"
             )}
             style={{
                 ...sortableStyle,
-                borderLeftWidth: project.color ? '3px' : undefined,
-                borderLeftColor: project.color || undefined,
+                ...(project.color && !isOver ? { backgroundColor: withAlpha(project.color, 0.08), borderColor: withAlpha(project.color, 0.35) } : {}),
             }}
             onClick={onOpen}
         >
@@ -181,15 +180,14 @@ function ProjectRow({ project, onOpen, onRename, onDelete, onColorChange }: Sort
         <div
             ref={setNodeRef}
             className={cn(
-                "group flex items-center gap-3 rounded-lg border bg-background px-3 py-2.5 transition-colors cursor-pointer overflow-hidden",
-                "hover:bg-accent/50 hover:border-accent-foreground/20",
+                "group flex items-center gap-3 rounded-lg border bg-background px-3 py-2.5 transition-all cursor-pointer overflow-hidden",
+                project.color ? "hover:brightness-75" : "hover:bg-accent/50 hover:border-accent-foreground/20",
                 isOver && "border-primary bg-primary/10 ring-2 ring-primary/30",
                 isDragging && "opacity-50 z-50 shadow-2xl"
             )}
             style={{
                 ...sortableStyle,
-                borderLeftWidth: project.color ? '3px' : undefined,
-                borderLeftColor: project.color || undefined,
+                ...(project.color && !isOver ? { backgroundColor: withAlpha(project.color, 0.08), borderColor: withAlpha(project.color, 0.35) } : {}),
             }}
             onClick={onOpen}
         >
